@@ -1,0 +1,44 @@
+{
+  "name": "Lemon Tree #1741811626358",
+  "symbol": "LTREE",
+  "description": "A unique Lemon Club NFT at the Lemon Tree stage with Ruby rarity",
+  "image": "http://localhost:3000/output/nft_1741811626358.png",
+  "attributes": [
+    {
+      "trait_type": "Stage",
+      "value": "Tree"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Ruby"
+    },
+    {
+      "trait_type": "Background",
+      "value": "BGgreengrass"
+    },
+    {
+      "trait_type": "Base",
+      "value": "redtree2"
+    }
+  ],
+  "seller_fee_basis_points": 500,
+  "collection": {
+    "name": "Lemon Club Collective",
+    "family": "LCC"
+  },
+  "properties": {
+    "files": [
+      {
+        "uri": "/output/nft_1741811626358.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image",
+    "creators": [
+      {
+        "address": "9kkHQYtLU142sFFHB7u7rB2C8MqQyhRKFiM85h81Ctgd",
+        "share": 100
+      }
+    ]
+  }
+}

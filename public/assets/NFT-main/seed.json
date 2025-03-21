@@ -1,0 +1,7 @@
+{
+  "name": "Lemon Seed",
+  "symbol": "LSEED",
+  "description": "A tiny lemon seed ready to grow!",
+  "image": "https://raw.githubusercontent.com/LemonClubCollective/NFT/refs/heads/main/seed.png",
+  "attributes": [{ "trait_type": "Stage", "value": "Seed" }]
+}

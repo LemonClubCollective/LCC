@@ -1,0 +1,9 @@
+{
+    "name": "Lemon Seed",
+    "symbol": "LSEED",
+    "description": "A tiny lemon seed ready to grow!",
+    "image": "https://i.imgur.com/lemon-seed.png",
+    "attributes": [
+        { "trait_type": "Stage", "value": "Seed" }
+    ]
+}

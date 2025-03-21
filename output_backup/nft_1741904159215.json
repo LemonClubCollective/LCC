@@ -1,0 +1,21 @@
+{
+  "name": "Lemon Sprout",
+  "symbol": "LSPRT",
+  "image": "https://raw.githubusercontent.com/LemonClubCollective/NFT/main/nft_1741904159215.png",
+  "description": "A Lemon Club NFT at the Lemon Sprout stage",
+  "attributes": [
+    {
+      "trait_type": "Stage",
+      "value": "Sprout"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Common"
+    }
+  ],
+  "seller_fee_basis_points": 500,
+  "collection": {
+    "name": "Lemon Club Collective",
+    "family": "LCC"
+  }
+}
