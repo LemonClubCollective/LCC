@@ -305,11 +305,11 @@ async function initialize() {
         db = client.db('lemonclub');
 
         const oldCollections = [
-            'C:\\Users\\public.DESKTOP-1IFDKN4\\my-nft-project\\data\\users',
-            'C:\\Users\\public.DESKTOP-1IFDKN4\\my-nft-project\\data\\posts',
-            'C:\\Users\\public.DESKTOP-1IFDKN4\\my-nft-project\\data\\tickets',
-            'C:\\Users\\public.DESKTOP-1IFDKN4\\my-nft-project\\data\\blogs',
-            'C:\\Users\\public.DESKTOP-1IFDKN4\\my-nft-project\\data\\videos'
+             'users',  // Simple collection names, not file paths
+            'posts',
+            'tickets',
+            'blogs',
+            'videos'
         ];
         const newCollectionNames = ['users', 'posts', 'tickets', 'blogs', 'videos'];
         for (let i = 0; i < oldCollections.length; i++) {
