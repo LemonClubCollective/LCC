@@ -4,9 +4,8 @@
   "description": "Lemon Club Collective NFT Project",
   "main": "server.js",
   "scripts": {
-  "start": "node server.js",
-  "postinstall": "npm rebuild canvas"
-}
+    "start": "node server.js",
+  },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.775.0",
     "@aws-sdk/client-s3": "^3.775.0",

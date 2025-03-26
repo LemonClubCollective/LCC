@@ -6,7 +6,6 @@ const { TOKEN_METADATA_PROGRAM_ID: IMPORTED_TOKEN_METADATA_PROGRAM_ID } = requir
 const fsPromises = require('fs').promises;
 const fs = require('fs');
 const path = require('path');
-const { createCanvas, loadImage } = require('canvas');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const CoinbaseCommerce = require('coinbase-commerce-node');
 const Client = CoinbaseCommerce.Client;
