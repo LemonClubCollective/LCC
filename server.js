@@ -298,7 +298,10 @@ async function initialize() {
         console.log('[Initialize] Created data directory:', DATA_DIR);
     }
 
-    const client = new MongoClient('mongodb+srv://lemonclub:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub');
+    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://lemonclub:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
+    const client = new MongoClient(mongoUri);
+
+
     try {
         await client.connect();
         console.log('[Initialize] Connected to MongoDB successfully');
