@@ -276,8 +276,8 @@ async function retryRPC(operation, maxAttempts = 5, delay = 1000) {
 }
 
 async function loadWallet() {
-    const walletData = await fsPromises.readFile('C:\\Users\\public.DESKTOP-1IFDKN4\\solana\\dev-wallet.json', 'utf8');
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(walletData)));
+  const walletData = await fsPromises.readFile(path.join(__dirname, 'data', 'dev-wallet.json'), 'utf8');
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(walletData)));
 }
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
@@ -766,7 +766,7 @@ app.get('/verify-email/:username/:token', async (req, res) => {
     users[username.toLowerCase()] = { ...user, isVerified: true, verificationToken: null }; // Sync users object
     await saveData(users, 'users');
     console.log(`[Verify-Email] Successfully verified ${username}`);
-    res.send('Email Verified! <a href="http://localhost:3001">Click here to log in</a>');
+    res.send('Email Verified! <a href="/">Click here to log in</a>');
 });
 
 app.post('/login', async (req, res) => {
@@ -2023,9 +2023,9 @@ app.get('/success', async (req, res) => {
             users[username].isPremium = true;
             users[username].subscriptionId = session.subscription;
             await saveData(users, 'users');
-            res.send('Subscription successful! <a href="http://localhost:3001">Return to site</a>');
+            res.send('Subscription successful! <a href="/">Return to site</a>');
         } else {
-            res.send('Payment not completed. <a href="http://localhost:3001">Return to site</a>');
+            res.send('Payment not completed. <a href="/">Return to site</a>');
         }
     } catch (error) {
         console.error('[Success] Error:', error.message);
@@ -2034,7 +2034,7 @@ app.get('/success', async (req, res) => {
 });
 
 app.get('/cancel', (req, res) => {
-    res.send('Payment canceled. <a href="http://localhost:3001">Return to site</a>');
+    res.send('Payment canceled. <a href="/">Return to site</a>');
 });
 
 app.post('/coinbase-checkout', async (req, res) => {
@@ -2343,6 +2343,10 @@ async function setLeviAsAdmin() {
         console.error('[AdminSetup] Error setting Levi as admin:', error.message);
     }
 }
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Ensure initialize runs only once
 if (!isInitialized) {
