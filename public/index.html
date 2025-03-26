@@ -1618,8 +1618,8 @@
                 return;
             }
             try {
-                const response = await fetch(`http://localhost:${port}/login`, {
-                    method: 'POST',
+                const response = await fetch(`/login`, {
+    method: 'POST'
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
@@ -1683,7 +1683,7 @@
                 alert("Please fill all fields and agree to the terms!");
                 return;
             }
-            const response = await fetch('http://localhost:3001/register', {
+            const response = await fetch('/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, username, password, emailConsent })
@@ -1759,7 +1759,7 @@
                 alert('Please login to subscribe!');
                 return;
             }
-            const response = await fetch('http://localhost:3001/create-subscription', {
+            const response = await fetch('/create-subscription', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: loggedInUsername })
@@ -1774,7 +1774,7 @@
         }
 
         async function loadProducts() {
-            const response = await fetch('http://localhost:3001/printify-products');
+            const response = await fetch('/printify-products');
             const data = await response.json();
             if (response.ok && data.success && data.data.length > 0) {
                 let html = '';
@@ -1803,7 +1803,7 @@
             }
             const address = prompt('Enter shipping address (name, street, city, state, zip, country):');
             if (!address) return;
-            const chargeResponse = await fetch('http://localhost:3001/create-charge', {
+            const chargeResponse = await fetch('/create-charge', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: loggedInUsername, amount: price })
@@ -1811,7 +1811,7 @@
             const chargeResult = await chargeResponse.json();
             if (chargeResponse.ok && chargeResult.success) {
                 window.open(chargeResult.chargeUrl, '_blank');
-                const orderResponse = await fetch('http://localhost:3001/printify-order', {
+                const orderResponse = await fetch('/printify-order', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: loggedInUsername, productId, address })
@@ -1836,7 +1836,7 @@
             }
             const formData = new FormData();
             formData.append('profilePic', file);
-            const response = await fetch(`http://localhost:3001/upload-profile-pic/${loggedInUsername}`, {
+            const response = await fetch(`/upload-profile-pic/${loggedInUsername}`, {
                 method: 'POST',
                 body: formData
             });
@@ -1906,7 +1906,7 @@
 
         async function updatePlaytime(minutes) {
             if (!loggedInUsername) return;
-            const response = await fetch(`http://localhost:3001/playtime/${loggedInUsername}`, {
+            const response = await fetch(`/playtime/${loggedInUsername}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ minutes })
@@ -1929,7 +1929,7 @@
                 alert('Please login to claim victory!');
                 return;
             }
-            const response = await fetch(`http://localhost:3001/claim-victory/${loggedInUsername}/${gameId}`, {
+            const response = await fetch(`/claim-victory/${loggedInUsername}/${gameId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -1950,7 +1950,7 @@
 
         async function fetchVictoryClaims() {
             if (!loggedInUsername) return;
-            const response = await fetch(`http://localhost:3001/profile/${loggedInUsername}`);
+            const response = await fetch(`/profile/${loggedInUsername}`);
             const data = await response.json();
             if (data.success) {
                 ['big-dill', 'owl-capone', 'lenny-lemon'].forEach(gameId => {
@@ -1972,7 +1972,7 @@
                 alert('Please fill all fields!');
                 return;
             }
-            const response = await fetch('http://localhost:3001/submit-ticket', {
+            const response = await fetch('/submit-ticket', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, message })
@@ -1993,7 +1993,7 @@
                 document.getElementById(containerId).innerHTML = '<p>Please login to manage your Lemon NFTs!</p>';
                 return;
             }
-            const response = await fetch(`http://localhost:3001/nft/${loggedInUsername.toLowerCase()}`, { method: 'GET' });
+            const response = await fetch(`/nft/${loggedInUsername.toLowerCase()}`, { method: 'GET' });
             const data = await response.json();
             console.log('[NFTs] Received from server:', data);
             if (response.ok && data.success) {
@@ -2006,7 +2006,7 @@
                 nfts.forEach(nft => {
                     const stageName = nft.name || 'Lemon Seed';
                     const mintAddress = nft.mintAddress;
-                    const imageUri = nft.imageUri ? nft.imageUri.replace('3000', '3001') : `http://localhost:3001/output/nft_${Date.now()}.png`;
+                    const imageUri = nft.imageUri ? nft.imageUri.replace('3000', '3001') : `/output/nft_${Date.now()}.png`;
                     const staked = nft.staked || false;
                     console.log(`[NFT Display] NFT ${mintAddress} staked: ${staked}`);
                     const baseStageName = stageName.split('#')[0].trim();
@@ -2070,7 +2070,7 @@
             const postButton = document.querySelector('button[onclick="postBlog()"]');
             postButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/blog-posts', {
+                const response = await fetch('/blog-posts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, content, username: loggedInUsername })
@@ -2119,10 +2119,10 @@
             const uploadButton = document.querySelector('button[onclick="uploadVideo()"]');
             uploadButton.disabled = true;
             try {
-                const response = await fetch(`http://localhost:${port}/upload-video`, {
-                    method: 'POST',
-                    body: formData
-                });
+                const response = await fetch(`/upload-video`, {
+    method: 'POST',
+    body: formData
+});
                 const result = await response.json();
                 console.log('[Video Upload] Response:', result);
                 if (response.ok && result.success) {
@@ -2150,7 +2150,7 @@
             const deleteButton = document.querySelector(`button[onclick="deleteVideo('${id}')"]`);
             deleteButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/delete-video', {
+                const response = await fetch('/delete-video', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id })
@@ -2178,7 +2178,7 @@
             const deleteButton = document.querySelector(`button[onclick="deleteBlog('${id}')"]`);
             if (deleteButton) deleteButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/delete-blog', {
+                const response = await fetch('/delete-blog', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ id })
@@ -2199,7 +2199,7 @@
         }
 
         async function updateVideoList() {
-            const response = await fetch('http://localhost:3001/videos');
+            const response = await fetch('/videos');
             const data = await response.json();
             console.log('[Videos] Server response:', data);
             if (response.ok && data.success) {
@@ -2223,7 +2223,7 @@
         }
 
         async function updateBlogPosts() {
-            const response = await fetch('http://localhost:3001/blog-posts');
+            const response = await fetch('/blog-posts');
             const data = await response.json();
             if (response.ok && data.success) {
                 let html = '';
@@ -2245,7 +2245,7 @@
 
         async function deletePost(postId) {
             if (!isAdmin) return alert('Admin access required!');
-            const response = await fetch('http://localhost:3001/delete-post', {
+            const response = await fetch('/delete-post', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ postId })
@@ -2266,7 +2266,7 @@
                 document.getElementById('profile-pic-history-list').innerHTML = '';
                 return;
             }
-            const response = await fetch(`http://localhost:3001/profile/${loggedInUsername}`);
+            const response = await fetch(`/profile/${loggedInUsername}`);
             const data = await response.json();
             console.log('[Profile] Fetched data:', data);
             if (response.ok && data.success) {
@@ -2276,10 +2276,10 @@
                 questPoints = bigInt(data.questPoints || "0");
                 mintingPoints = bigInt(data.mintingPoints || "0");
                 bonusPoints = bigInt(data.bonusPoints || "0");
-                loggedInProfilePic = data.profilePic ? `http://localhost:3001${data.profilePic}` : 'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP1.png';
+                loggedInProfilePic = data.profilePic ? `${data.profilePic}` : 'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP1.png';
                 console.log('[Profile] loggedInProfilePic set to:', loggedInProfilePic);
                 let html = `
-                    <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='http://localhost:3001/public/placeholder.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
+                    <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='/public/placeholder.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
                     <p>Username: ${loggedInUsername}</p>
                     <p>Lemonade Points: ${lemonadePoints.toString()}</p>
                     <p>Staking Points: ${stakingPoints.toString()}</p>
@@ -2318,8 +2318,8 @@
                 alert('Please login to change your profile picture!');
                 return;
             }
-            const response = await fetch(`http://localhost:${port}/profile/${loggedInUsername}/update-pic`, {
-                method: 'POST',
+            const response = await fetch(`/profile/${loggedInUsername}/update-pic`, {
+    method: 'POST'
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ profilePic: picUrl })
             });
@@ -2339,7 +2339,7 @@
         }
 
         async function updatePostsDisplay() {
-            const response = await fetch('http://localhost:3001/posts');
+            const response = await fetch('/posts');
             const postsData = await response.json();
             console.log('[Posts] Server response:', postsData);
             if (response.ok && Array.isArray(postsData) && postsData.length > 0) {
@@ -2430,7 +2430,7 @@
             const postButton = document.querySelector('button[onclick="submitPost()"]');
             postButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/posts', {
+                const response = await fetch('/posts', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ wallet: walletAddress, content, username: loggedInUsername, profilePic: loggedInProfilePic })
@@ -2468,7 +2468,7 @@
             const commentButton = document.querySelector(`#comment-input-${postId}-${pathKey} button`);
             commentButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/posts/comment', {
+                const response = await fetch('/posts/comment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -2509,7 +2509,7 @@
             const likeButton = event.currentTarget;
             likeButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/posts/like', {
+                const response = await fetch('/posts/like', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ wallet: walletAddress, postId })
@@ -2539,7 +2539,7 @@
             const likeButton = event.currentTarget;
             likeButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/posts/like-comment', {
+                const response = await fetch('/posts/like-comment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ postId, commentId, wallet: walletAddress })
@@ -2570,7 +2570,7 @@
             const deleteButton = event.currentTarget;
             deleteButton.disabled = true;
             try {
-                const response = await fetch('http://localhost:3001/posts/delete-comment', {
+                const response = await fetch('/posts/delete-comment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ postId, commentId })
@@ -2602,7 +2602,7 @@
             if (!commentSection) return;
             commentSection.classList.toggle('visible');
             if (commentSection.classList.contains('visible')) {
-                fetch('http://localhost:3001/posts')
+                fetch('/posts')
                     .then(res => res.json())
                     .then(postsData => {
                         const post = postsData.find(p => p._id.toString() === postId);
@@ -2616,7 +2616,7 @@
                 alert('Please login and connect wallet to stake!');
                 return;
             }
-            const response = await fetch(`http://localhost:3001/stake/${loggedInUsername}/${mintAddress}`, { method: 'POST' });
+            const response = await fetch(`/stake/${loggedInUsername}/${mintAddress}`, { method: 'POST' });
             const result = await response.json();
             if (response.ok && result.success) {
                 await updateProfileDisplay();
@@ -2650,7 +2650,7 @@
                 const username = loggedInUsername || 'tester';
                 if (!username) throw new Error('Please login to mint!');
 
-                const response = await fetch('http://localhost:3001/api/mint-nft', {
+                const response = await fetch('/api/mint-nft', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ walletAddress: publicKey, username: username })
@@ -2661,7 +2661,7 @@
                 const data = await response.json();
                 console.log('[Mint] Full Server Response:', data);
                 console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
-                const imageUri = `http://localhost:3001/output/nft_${Date.now()}.png`;
+                const imageUri = `/output/nft_${Date.now()}.png`;
 
                 console.log('[Mint] Signing Tx1 with Phantom...');
                 if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
@@ -2716,7 +2716,7 @@
                 alert('Please login and connect wallet to unstake!');
                 return;
             }
-            const response = await fetch(`http://localhost:3001/unstake/${loggedInUsername}/${mintAddress}`, { method: 'POST' });
+            const response = await fetch(`/unstake/${loggedInUsername}/${mintAddress}`, { method: 'POST' });
             const result = await response.json();
             if (response.ok && result.success) {
                 await updateProfileDisplay();
@@ -2744,7 +2744,7 @@
             }
             button.classList.add('loading');
             try {
-                const response = await fetch(`http://localhost:3001/evolve/${loggedInUsername}/${mintAddress}`, {
+                const response = await fetch(`/evolve/${loggedInUsername}/${mintAddress}`, {
                     method: 'GET'
                 });
                 const result = await response.json();
@@ -2780,7 +2780,7 @@
                 return;
             }
 
-            const response = await fetch(`http://localhost:${port}/quests/${loggedInUsername}`);
+            const response = await fetch(`/quests/${loggedInUsername}`);
             const data = await response.json();
             console.log('[Quests] Server response:', data);
 
@@ -2871,7 +2871,7 @@
             const claimButton = document.querySelector(`button[onclick="claimQuestReward('${questId}', '${type}')"]`);
             claimButton.disabled = true;
             try {
-                const response = await fetch(`http://localhost:3001/claim-quest/${loggedInUsername}/${type}/${questId}`, {
+                const response = await fetch(`/claim-quest/${loggedInUsername}/${type}/${questId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -2901,7 +2901,7 @@
             }
             try {
                 console.log(`[Client Quest Update] Updating ${questId}, type: ${type}, increment: ${increment}`);
-                const response = await fetch(`http://localhost:3001/quests/${loggedInUsername}/update`, {
+                const response = await fetch(`/quests/${loggedInUsername}/update`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ type, questId, increment })
@@ -2969,7 +2969,7 @@
                 alert('Please enter an email address!');
                 return;
             }
-            const response = await fetch('http://localhost:3001/subscribe-newsletter', {
+            const response = await fetch('/subscribe-newsletter', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email })
@@ -3029,7 +3029,7 @@
                 canDeleteBlogs: document.getElementById('admin-canDeleteBlogs').checked,
                 canDeleteVideos: document.getElementById('admin-canDeleteVideos').checked
             };
-            const response = await fetch(`http://localhost:3001/admin/update-user-permissions/${username}`, {
+            const response = await fetch(`/admin/update-user-permissions/${username}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isAdmin, permissions })
