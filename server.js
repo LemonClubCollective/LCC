@@ -30,7 +30,7 @@ const s3Client = new S3Client({
 });
 
 // Constants
-const port = 3001;
+const port = process.env.PORT || 8080;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
