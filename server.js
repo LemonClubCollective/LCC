@@ -276,8 +276,13 @@ async function retryRPC(operation, maxAttempts = 5, delay = 1000) {
 }
 
 async function loadWallet() {
-  const walletData = await fsPromises.readFile(path.join(__dirname, 'data', 'dev-wallet.json'), 'utf8');
-  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(walletData)));
+  try {
+    const walletData = await fsPromises.readFile(path.join(__dirname, 'data', 'dev-wallet.json'), 'utf8');
+    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(walletData)));
+  } catch (error) {
+    console.error('[loadWallet] Error loading dev-wallet.json:', error.message);
+    throw new Error('Failed to load dev wallet');
+  }
 }
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
