@@ -1,0 +1,9 @@
+{
+    "name": "Lemon Sprout",
+    "symbol": "LSPRT",
+    "description": "A sprouting lemon plant breaking through the soil!",
+    "image": "https://i.imgur.com/example-sprout.png",
+    "attributes": [
+        { "trait_type": "Stage", "value": "Sprout" }
+    ]
+}

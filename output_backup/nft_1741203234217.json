@@ -1,0 +1,44 @@
+{
+  "name": "Lemon Seed #1741203234217",
+  "symbol": "LSEED",
+  "description": "A unique Lemon Club NFT at the Lemon Seed stage with Amethyst rarity",
+  "image": "http://localhost:3000/output/nft_1741203234217.png",
+  "attributes": [
+    {
+      "trait_type": "Stage",
+      "value": "Seed"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Amethyst"
+    },
+    {
+      "trait_type": "Background",
+      "value": "BGnightforest1"
+    },
+    {
+      "trait_type": "Base",
+      "value": "purpleseed"
+    }
+  ],
+  "seller_fee_basis_points": 500,
+  "collection": {
+    "name": "Lemon Club Collective",
+    "family": "LCC"
+  },
+  "properties": {
+    "files": [
+      {
+        "uri": "/output/nft_1741203234217.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image",
+    "creators": [
+      {
+        "address": "9kkHQYtLU142sFFHB7u7rB2C8MqQyhRKFiM85h81Ctgd",
+        "share": 100
+      }
+    ]
+  }
+}

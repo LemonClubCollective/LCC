@@ -1,0 +1,44 @@
+{
+  "name": "Lemon Sprout #1740945594534",
+  "symbol": "LSPRT",
+  "description": "A unique Lemon Club NFT at the Lemon Sprout stage with Amethyst rarity!",
+  "image": "http://localhost:3000/output/nft_1740945594534.png",
+  "attributes": [
+    {
+      "trait_type": "Stage",
+      "value": "Sprout"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Amethyst"
+    },
+    {
+      "trait_type": "Background",
+      "value": "BGforestgrass"
+    },
+    {
+      "trait_type": "Base",
+      "value": "purplesprout1"
+    }
+  ],
+  "seller_fee_basis_points": 500,
+  "collection": {
+    "name": "Lemon Club Collective",
+    "family": "LCC"
+  },
+  "properties": {
+    "files": [
+      {
+        "uri": "/output/nft_1740945594534.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image",
+    "creators": [
+      {
+        "address": "9kkHQYtLU142sFFHB7u7rB2C8MqQyhRKFiM85h81Ctgd",
+        "share": 100
+      }
+    ]
+  }
+}

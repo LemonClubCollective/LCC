@@ -1,0 +1,21 @@
+{
+  "name": "Lemon Tree",
+  "symbol": "LTREE",
+  "image": "https://raw.githubusercontent.com/LemonClubCollective/NFT/main/nft_1741901202148.png",
+  "description": "A Lemon Club NFT at the Lemon Tree stage",
+  "attributes": [
+    {
+      "trait_type": "Stage",
+      "value": "Tree"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Common"
+    }
+  ],
+  "seller_fee_basis_points": 500,
+  "collection": {
+    "name": "Lemon Club Collective",
+    "family": "LCC"
+  }
+}
