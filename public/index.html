@@ -1,0 +1,3060 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lemon Club Collective</title>
+    <link href="https://fonts.googleapis.com/css2?family=Chelsea+Market&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Chelsea Market', cursive;
+            margin: 0;
+            padding: 0;
+            background-color: #87ceeb;
+            overflow-x: hidden;
+        }
+        .town-container {
+            position: relative;
+            min-height: 100vh;
+            background: url('https://raw.githubusercontent.com/LemonClubCollective/NFT/main/LCCtown.webp') repeat-y center top;
+            background-size: 100% auto;
+            text-align: center;
+        }
+        .parallax {
+            perspective: 1px;
+            height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        .parallax-layer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
+        }
+        .parallax-back {
+            transform: translateZ(-1px) scale(2);
+            z-index: -1;
+        }
+        .parallax-base {
+            transform: translateZ(0);
+            z-index: 1;
+            position: relative; /* To contain the absolutely positioned footer */
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 10px 20px;
+            background-color: rgba(255, 250, 205, 0.7);
+            z-index: 10;
+            transition: transform 0.3s ease;
+        }
+        .header.hidden {
+            transform: translateY(-100%);
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-center {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-direction: column;
+            align-items: flex-end;
+            margin-right: 50px;
+        }
+        .auth-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .lcc-logo {
+            width: 80px;
+            height: auto;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        .lcc-logo:hover {
+            transform: scale(1.1);
+        }
+        #menu-container {
+            display: none;
+        }
+        #menu-container.active {
+            display: block;
+        }
+        .buildings {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            flex-grow: 1;
+            background-color: rgba(255, 250, 205, 0.7);
+            padding: 10px 0;
+            z-index: 20; /* Higher than .content to prevent overlap */
+        }
+        .building {
+            width: 160px;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+        }
+        .building:hover {
+            transform: scale(1.1);
+        }
+        .building.active {
+            box-shadow: 0 0 10px #ff4500;
+        }
+        .building img {
+            width: 100%;
+            height: auto;
+        }
+        .building-label {
+            color: #fffacd;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px #228b22;
+            margin-top: 5px;
+        }
+        .building.friends, .building.shop, .building.dexscreener, .building.support {
+            width: 192px;
+        }
+        #building-blog, #building-videos {
+            width: 104px;
+        }
+        .dropdown {
+            position: relative;
+            z-index: 30;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: rgba(255, 250, 205, 0.9);
+            min-width: 200px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 40;
+            border-radius: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 100%;
+            padding: 10px 0;
+        }
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+        .dropdown-content div {
+            color: #ff4500;
+            padding: 8px 10px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            position: relative;
+            z-index: 41;
+        }
+        .dropdown-content div img {
+            width: 20px;
+            height: auto;
+            margin-right: 8px;
+        }
+        .dropdown-content div:hover {
+            background-color: #fffacd;
+        }
+        .content {
+            display: none;
+            position: relative;
+            margin: 150px auto 20px;
+            background-color: rgba(255, 250, 205, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            max-width: 80%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: left;
+            z-index: 5;
+            padding-bottom: 60px; /* Prevent overlap with footer */
+        }
+        .content.active {
+            display: block;
+        }
+        .content-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .social-links {
+            display: flex;
+            gap: 10px;
+        }
+        .social-icon {
+            width: 30px;
+            height: auto;
+            transition: transform 0.3s;
+        }
+        .social-icon:hover {
+            transform: scale(1.2);
+        }
+        #nft-info {
+            display: none; /* Hidden by default */
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            overflow: auto;
+        }
+        #staking #nft-info {
+            display: flex; /* Only show in staking page */
+        }
+        .nft-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 0;
+            display: inline-block;
+            width: 300px;
+            background-color: white;
+            vertical-align: top;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+            box-sizing: border-box;
+        }
+        .nft-card:hover {
+            transform: scale(1.05);
+        }
+        .nft-card.staked {
+            border: 2px solid #ff4500;
+        }
+        .nft-card img {
+            max-width: 200px;
+        }
+        .nft-card-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        .nft-card-button {
+            padding: 8px 12px;
+            margin: 2px;
+            font-size: 12px;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+        .nft-card-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+        }
+        .nft-card-button.evolve-btn {
+            background-color: #00bcd4;
+            color: white;
+        }
+        .nft-card-button.evolve-btn:hover {
+            background-color: #0097a7;
+        }
+        .nft-card-button.stake-btn {
+            background-color: #4caf50;
+            color: white;
+        }
+        .nft-card-button.stake-btn:hover {
+            background-color: #388e3c;
+        }
+        .nft-card-button.unstake-btn {
+            background-color: #ffeb3b;
+            color: black;
+        }
+        .nft-card-button.unstake-btn:hover {
+            background-color: #fdd835;
+        }
+        .nft-card-button.evolve-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        button {
+            padding: 8px 16px;
+            margin: 5px;
+            background-color: #32cd32;
+            color: white;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:hover {
+            background-color: #228b22;
+            transform: scale(1.05);
+            box-shadow: 0 0 8px #32cd32;
+        }
+        button.loading::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 3px solid #fff;
+            border-top: 3px solid #ffeb3b;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        button.loading {
+            color: transparent;
+        }
+        [data-tooltip] {
+            position: relative;
+            z-index: 50;
+        }
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            background-color: #ff4500;
+            color: white;
+            font-family: 'Chelsea Market', cursive;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            white-space: nowrap;
+            z-index: 51;
+            top: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        button[data-tooltip]:hover::after {
+            bottom: 100%;
+            margin-bottom: 5px;
+        }
+        .building[data-tooltip]:hover::after {
+            top: -35px;
+            margin-top: 0;
+        }
+        input, textarea {
+            width: 100%;
+            max-width: 300px;
+            margin: 5px 0;
+            padding: 5px;
+            font-family: 'Chelsea Market', cursive;
+        }
+        textarea {
+            height: 80px;
+        }
+        .auth-container {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            display: inline-block;
+        }
+        .auth-row {
+            margin: 10px 0;
+        }
+        .post-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px auto;
+            width: 80%;
+            max-width: 600px;
+            background-color: white;
+            text-align: left;
+        }
+        .post-card p {
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        .post-card button, .comment button {
+            font-size: 12px;
+        }
+        .comment-section {
+            margin-top: 10px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+            display: none;
+        }
+        .comment-section.visible {
+            display: block;
+        }
+        .comment {
+            font-size: 12px;
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .comment.replied {
+            margin-left: 20px;
+            background-color: #e0e0e0;
+            display: block !important;
+        }
+        .replies {
+            margin-left: 20px;
+            display: block !important;
+        }
+        .comment.replied.nested-debug {
+            border: 1px solid #ff4500;
+            padding: 5px;
+        }
+        .comment-input {
+            width: 100%;
+            max-width: 280px;
+            height: 40px;
+            margin: 5px 0;
+        }
+        #login-status, #wallet-status {
+            color: #fffacd;
+            text-shadow: 1px 1px 2px #228b22;
+        }
+        #points-display {
+            color: #fffacd;
+            text-shadow: 1px 1px 2px #228b22;
+            font-size: 16px;
+        }
+        table {
+            width: 100%;
+            max-width: 500px;
+            margin: 10px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #ffeb3b;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            text-align: center;
+        }
+        li {
+            margin: 10px 0;
+        }
+        .roadmap-img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px auto;
+            display: block;
+            border: 2px solid #ff4500;
+            border-radius: 10px;
+        }
+        .step {
+            margin: 15px 0;
+            font-size: 23.4px;
+            color: #ff4500;
+            text-align: center;
+        }
+        #friends, #support, #store, #videos {
+            text-align: center;
+            font-size: 48px;
+        }
+        #friends h3, #friends p, #support h3, #support p, #store h3, #store p, #videos h3, #videos p {
+            margin: 20px auto;
+            max-width: 800px;
+        }
+        #friends .content-header h2, #support .content-header h2, #store .content-header h2, #videos .content-header h2 {
+            font-size: 72px;
+        }
+        #home, #tokenomics, #roadmap, #howtobuy, #quests, #profile, #blog, #admin, #videos {
+            text-align: center;
+        }
+        #home p, #tokenomics p, #roadmap p, #howtobuy p, #quests p, #profile p, #blog p, #admin p, #videos p, 
+        #home h3, #tokenomics h3, #roadmap h3, #howtobuy h3, #quests h3, #profile h3, #blog h3, #admin h3, #videos h3,
+        #home table, #tokenomics table, #roadmap table, #howtobuy table, #quests table, #profile table, #blog table, #admin table, #videos table {
+            font-size: 1.3em;
+        }
+        .quest-list {
+            margin: 20px 0;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .quest-item {
+            background-color: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        .quest-item h4 {
+            margin: 0 0 10px;
+            color: #ff4500;
+        }
+        .quest-progress {
+            width: 100%;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            height: 20px;
+            margin: 10px 0;
+        }
+        .quest-progress-bar {
+            height: 100%;
+            background-color: #32cd32;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
+        .quest-item button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .profile-pic {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin: 10px auto;
+            display: block;
+        }
+        #profile-pic-display {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin: 10px auto;
+            display: block;
+        }
+        .profile-pic-option {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            margin: 5px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .profile-pic-option:hover {
+            transform: scale(1.1);
+        }
+        .profile-pic-option.selected {
+            border: 2px solid #ff4500;
+        }
+        #profile-upload, #admin-upload {
+            margin-top: 20px;
+        }
+        #profile-upload input[type="file"], #admin-upload input[type="file"] {
+            margin: 10px 0;
+        }
+        footer {
+            background-color: rgba(255, 250, 205, 0.7);
+            padding: 20px 0;
+            text-align: center;
+            color: #ff4500;
+            font-size: 16px;
+            border-top: 2px solid #ff4500;
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+        }
+        .friend-game, .friend-section {
+            margin: 20px auto;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            max-width: 900px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .friend-game h3, .friend-section h3 {
+            color: #ff4500;
+            font-size: 36px;
+            margin-bottom: 10px;
+            text-shadow: 1px 1px 2px #fffacd;
+        }
+        .friend-game p, .friend-section p {
+            font-size: 18px;
+            color: #228b22;
+            margin: 10px 0;
+        }
+        .friend-game iframe, .friend-section iframe {
+            border-radius: 10px;
+            margin: 20px 0;
+            box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
+            transition: transform 0.3s ease;
+        }
+        .friend-game iframe:hover, .friend-section iframe:hover {
+            transform: scale(1.02);
+        }
+        .game-container {
+            position: relative;
+        }
+        .game-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .start-game-btn {
+            background-color: #32cd32;
+        }
+        .start-game-btn:hover {
+            background-color: #228b22;
+        }
+        .stop-game-btn {
+            background-color: #f44336;
+        }
+        .stop-game-btn:hover {
+            background-color: #d32f2f;
+        }
+        .claim-victory-btn {
+            background-color: #ffeb3b;
+            color: black;
+        }
+        .claim-victory-btn:hover:not(:disabled) {
+            background-color: #fdd835;
+        }
+        .timer-display {
+            font-size: 16px;
+            color: #ff4500;
+            margin: 10px 0;
+        }
+        .support-form label {
+            display: block;
+            margin: 5px 0;
+        }
+        .support-form input[type="checkbox"] {
+            width: auto;
+            margin-right: 5px;
+        }
+        .video-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px auto;
+            width: 80%;
+            max-width: 600px;
+            background-color: white;
+            text-align: center;
+        }
+        .video-card video {
+            width: 100%;
+            max-width: 500px;
+            border-radius: 5px;
+        }
+        #profile-icon {
+            width: 130px;
+            height: 130px;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: transform 0.2s;
+            object-fit: cover;
+        }
+        #profile-icon:hover {
+            transform: scale(1.05);
+        }
+        .town-title {
+            color: #ff4500;
+            font-size: 48px;
+            padding: 0;
+            text-shadow: 2px 2px 4px #fffacd;
+            margin: 0;
+        }
+        .points-breakdown {
+            font-size: 14px;
+            color: #ff4500;
+            margin-top: 5px;
+            text-align: center;
+        }
+        .points-progress {
+            font-size: 14px;
+            color: #ff4500;
+            margin-top: 5px;
+        }
+        #splash-page {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background: url('https://raw.githubusercontent.com/LemonClubCollective/NFT/main/LCCtown.webp') no-repeat center center;
+            background-size: cover;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .splash-icon {
+            position: absolute;
+            animation: float 3s ease-in-out infinite;
+            transition: transform 0.2s ease;
+        }
+        #splash-page .splash-icon:hover {
+            transform: scale(1.1);
+        }
+        .splash-icon img {
+            width: 100%;
+            height: auto;
+            transition: transform 0.2s ease;
+        }
+        .splash-icon:hover img {
+            transform: scale(1.1);
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        .grow-lemons-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(45deg, #ffeb3b, #ff4500);
+            color: white;
+            font-size: 24px;
+            padding: 20px 40px;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            animation: pulse 2s infinite;
+            z-index: 10;
+        }
+        .grow-lemons-btn:hover {
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.05); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+        .what-is-lcc-container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255, 250, 205, 0.95);
+            border-radius: 15px;
+            max-width: 80%;
+            margin: 0 auto;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .what-is-lcc-container h1 {
+            color: #ff4500;
+            font-size: 48px;
+            text-shadow: 2px 2px 4px #fffacd;
+            margin-bottom: 20px;
+        }
+        .what-is-lcc-container p {
+            font-size: 18px;
+            color: #228b22;
+            margin: 20px 0;
+        }
+        .what-is-lcc-container img {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border: 2px solid #ff4500;
+            border-radius: 10px;
+        }
+        .what-is-lcc-container button {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="splash-page" class="active">
+        <div class="splash-icon" style="top: 10%; left: 10%; width: 240px;">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/townhall.png" alt="Town Hall">
+        </div>
+        <div class="splash-icon" style="top: 20%; left: 25%; width: 280px;">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/greenhouse.png" alt="Garden">
+        </div>
+        <div class="splash-icon" style="top: 15%; left: 40%; width: 320px;">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/treehouse.png" alt="Friends">
+        </div>
+        <div class="splash-icon" style="top: 30%; left: 55%; width: 240px;">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/gallery.png" alt="Quests">
+        </div>
+        <div class="splash-icon" style="top: 40%; left: 70%; width: 200px">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/blog.png" alt="Blog">
+        </div>
+        <div class="splash-icon" style="top: 50%; left: 15%; width: 280px;">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/shop.png" alt="Store">
+        </div>
+        <div class="splash-icon" style="top: 60%; left: 30%; width: 240px;">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/forum.png" alt="Forum">
+        </div>
+        <div class="splash-icon" style="top: 70%; left: 45%; width: 200px;">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/videosicon.png" alt="Videos">
+        </div>
+        <div class="splash-icon" style="top: 80%; left: 60%; width: 240px">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/helpdesk.png" alt="Admin">
+        </div>
+        <div class="splash-icon" style="top: 25%; left: 80%; width: 200px">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/tokenomics.png" alt="Tokenomics">
+        </div>
+        <div class="splash-icon" style="top: 35%; left: 85%; width: 200px">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/roadmap.png" alt="Road Map">
+        </div>
+        <div class="splash-icon" style="top: 45%; left: 90%; width: 200px">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/howto.png" alt="How to Buy">
+        </div>
+        <button class="grow-lemons-btn" id="grow-lemons-btn"onclick="showContent('what-is-lcc')">Grow Lemons</button>
+    </div>
+    <div class="town-container parallax" id="main-site" style="display: none;">
+        <div class="parallax-layer parallax-back">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/LCCtown.webp" style="width: 100%; height: auto;">
+        </div>
+        <div class="parallax-layer parallax-base">
+            <div id="what-is-lcc" class="content">
+                <div class="what-is-lcc-container">
+                    <h1>What is Lemon Club Collective?</h1>
+                    <p>Welcome to Lemon Club Collective—a zesty community turning crypto chaos into real-world wins! We rescue rugged tokens, fund sustainable projects like solar panels and community gardens, and let you stake NFTs for epic rewards.</p>
+                    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/towncenter.png" alt="Lemon Club Town Center">
+                    <p>Mint evolving NFTs, play arcade games, and stack Lemonade Points to level up. Join us to transform losses into a greener future—let's grow some lemons together!</p>
+                    <button onclick="showContent('home')" data-tooltip="Sign In">Sign In</button>
+                    <button onclick="showContent('home')" data-tooltip="Join the Club">Join the Club</button>
+                </div>
+            </div>
+            <div class="header">
+                <div class="header-left">
+                    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lcclogo.png" alt="LCC Logo" class="lcc-logo" onclick="showContent('home')">
+                </div>
+                <div class="header-center">
+                    <h1 class="town-title">Lemon Club Collective</h1>
+                </div>
+                <div class="header-right">
+                    <div class="auth-section">
+                        <img id="profile-icon" alt="Profile Picture" data-tooltip="Your Profile" onclick="showContent('profile')">
+                        <div id="login-status">Not logged in</div>
+                        <button id="auth-btn" data-tooltip="Login or Logout" onclick="toggleAuth()">Log</button>
+                        <div>
+                            <div id="wallet-status">Wallet not connected</div>
+                            <div id="points-display">Lemonade Points: 0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="menu-container" class="active">
+                <div class="buildings">
+                    <div class="building" id="building-home" onclick="showContent('home')" data-tooltip="Visit Home">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/townhall.png" alt="Town Hall">
+                        <div class="building-label">Home</div>
+                    </div>
+                    <div class="building" id="building-staking" onclick="showContent('staking')" data-tooltip="Stake NFTs">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/greenhouse.png" alt="Garden">
+                        <div class="building-label">Garden</div>
+                    </div>
+                    <div class="building friends" id="building-friends" onclick="showContent('friends')" data-tooltip="Meet Friends">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/treehouse.png" alt="Friends">
+                        <div class="building-label">Friends</div>
+                    </div>
+                    <div class="building" id="building-quests" onclick="showContent('quests')" data-tooltip="Lemon Grove Quests">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/gallery.png" alt="Quests">
+                        <div class="building-label">Quests</div>
+                    </div>
+                    <div class="building" id="building-blog" onclick="showContent('blog')" data-tooltip="Read Blog/Newsletter">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/blog.png" alt="Blog">
+                        <div class="building-label">Blog</div>
+                    </div>
+                    <div class="building shop" id="building-store" onclick="showContent('store')" data-tooltip="Buy Merch">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/shop.png" alt="Store">
+                        <div class="building-label">Store</div>
+                    </div>
+                    <div class="building" id="building-forum" onclick="showContent('forum')" data-tooltip="Join Forum">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/forum.png" alt="Forum">
+                        <div class="building-label">Forum</div>
+                    </div>
+                    <div class="building" id="building-videos" onclick="showContent('videos')" data-tooltip="Watch Videos">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/videosicon.png" alt="Videos">
+                        <div class="building-label">Videos</div>
+                    </div>
+                    <div class="building" id="building-admin" onclick="showContent('admin')" data-tooltip="Admin Portal">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/helpdesk.png" alt="Admin">
+                        <div class="building-label">Admin</div>
+                    </div>
+                    <div class="building dropdown" id="building-more" data-tooltip="More Options">
+                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/townhall.png" alt="More">
+                        <div class="building-label">More</div>
+                        <div class="dropdown-content">
+                            <div onclick="showContent('tokenomics')">
+                                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/tokenomics.png" alt="Tokenomics">
+                                Tokenomics
+                            </div>
+                            <div onclick="showContent('roadmap')">
+                                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/roadmap.png" alt="Road Map">
+                                Road Map
+                            </div>
+                            <div onclick="showContent('howtobuy')">
+                                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/howto.png" alt="How to Buy">
+                                How to Buy
+                            </div>
+                            <div onclick="showContent('support')">
+                                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/helpdesk.png" alt="Support">
+                                Support
+                            </div>
+                            <div onclick="window.open('https://dexscreener.com/solana/edhssiovavy7jkqiwur1psczpgz2khoqbm mlytppxzpp', '_blank')">
+                                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/dex.png" alt="DexScreener">
+                                DexScreener
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="home" class="content active">
+                <div class="content-header">
+                    <h2>Welcome To Lemon Club!</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <p>CA: EK1mT7iPC9eP8wfS5QQABdNEkLVYz3dc2Tuok11naKnB</p>
+                <p><strong>Mission:</strong> Give meaningful utility to rugged token projects with Lemon Club Collective Take Over (LCCTO). Where rugs come back to life.</p>
+                <p>Rug Pulls are rampant across crypto, with many investors losing their money to quick pump and dump scams from sites like pump.fun and Moonshot. We give these tokens utility within our network of offerings of no-rug projects doing REAL LIFE good for the world.</p>
+                <div class="auth-container">
+                    <div class="auth-row">
+                        <input type="email" id="regEmail" placeholder="Email" style="display: inline-block; width: 45%;">
+                        <input type="text" id="regUsername" placeholder="Username" style="display: inline-block; width: 45%;">
+                        <input type="password" id="regPassword" placeholder="Password" style="display: inline-block; width: 45%;">
+                        <label style="display: block;"><input type="checkbox" id="regTos" required> I agree to the <a href="/terms.html" target="_blank">Terms of Service</a> and <a href="/privacy.html" target="_blank">Privacy Policy</a></label>
+                        <label style="display: block;"><input type="checkbox" id="regRisk" required> I understand crypto investments involve risk</label>
+                        <label style="display: block;"><input type="checkbox" id="regEmailConsent"> I consent to email updates</label>
+                        <button id="join-btn" onclick="register()" data-tooltip="Join the Club">Sign Up</button>
+                    </div>
+                    <div class="auth-row">
+                        <input type="text" id="loginUsername" placeholder="Username" style="display: inline-block; width: 45%;">
+                        <input type="password" id="loginPassword" placeholder="Password" style="display: inline-block; width: 45%;">
+                        <button onclick="login()" data-tooltip="Login to Account" style="display: inline-block; vertical-align: middle;">Login</button>
+                    </div>
+                    <button onclick="logout()" data-tooltip="Logout of Account">Logout</button>
+                </div>
+            </div>
+            <div id="staking" class="content">
+                <div class="content-header">
+                    <h2>Garden - Staking</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <button onclick="mintNFT(this)" data-tooltip="Mint a New NFT">Mint New NFT</button>
+                <button id="connect-wallet-btn-staking" onclick="toggleWalletConnection()" data-tooltip="Connect/Disconnect Solana Wallet">Connect Solana Wallet</button>
+                <div id="nft-info"><p>Please login to manage your Lemon NFTs!</p></div>
+            </div>
+            <div id="tokenomics" class="content">
+                <div class="content-header">
+                    <h2>Tokenomics</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <p>CA: EK1mT7iPC9eP8wfS5QQABdNEkLVYz3dc2Tuok11naKnB</p>
+                <h3>$LCC Token</h3>
+                <table>
+                    <tr><th>Total Supply</th><td>1,000,000,000,000,000</td></tr>
+                    <tr><th>Distribution</th><td></td></tr>
+                    <tr><td>Liquidity Pool</td><td>60%</td></tr>
+                    <tr><td>Community Wallet</td><td>10%</td></tr>
+                    <tr><td>Team</td><td>10%</td></tr>
+                    <tr><td>Staking</td><td>10%</td></tr>
+                    <tr><td>Bounties</td><td>10%</td></tr>
+                </table>
+                <h3>$LCDAO Token</h3>
+                <table>
+                    <tr><th>Total Supply</th><td>100,000,000,000</td></tr>
+                </table>
+            </div>
+            <div id="roadmap" class="content">
+                <div class="content-header">
+                    <h2>Road Map</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <h3>Lemon Club Collective Roadmap</h3>
+                <div class="step">Step 1: Launch Website and NFT Minting (Q1 2025)</div>
+                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/roadmap.png" alt="Roadmap Step 1" class="roadmap-img" onerror="console.error('Roadmap image failed:', this.src)">
+                <div class="step">Step 2: Community Expansion and Staking (Q2 2025)</div>
+                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/roadmap1.png" alt="Roadmap Step 2" class="roadmap-img" onerror="console.error('Roadmap image failed:', this.src)">
+                <div class="step">Step 3: Merch Store and Partnerships (Q3 2025)</div>
+                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/roadmap2.png" alt="Roadmap Step 3" class="roadmap-img" onerror="console.error('Roadmap image failed:', this.src)">
+                <div class="step">Step 4: Token Utility Expansion (Q4 2025)</div>
+            </div>
+            <div id="howtobuy" class="content">
+                <div class="content-header">
+                    <h2>How to Buy $LCC</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <h3>Step 1: Get a Solana Wallet</h3>
+                <p>Download <a href="https://phantom.app/" target="_blank">Phantom Wallet</a> or another Solana-compatible wallet. Set it up with a secure seed phrase—keep it safe and don’t share it!</p>
+                <h3>Step 2: Buy SOL</h3>
+                <p>Get some SOL (Solana’s native token) from an exchange like Binance, Coinbase, or Kraken. Transfer it to your Phantom wallet address.</p>
+                <h3>Step 3: Swap SOL for $LCC</h3>
+                <p>Head to <a href="https://jup.ag/swap/SOL-LCC" target="_blank">Jupiter Aggregator</a>. Connect your Phantom wallet, select SOL as the input, and paste our contract address (EK1mT7iPC9eP8wfS5QQABdNEkLVYz3dc2Tuok11naKnB) for $LCC as the output.</p>
+                <p>Enter how much SOL you want to swap for $LCC (start small if you’re new!). Double-check everything, then hit “Swap Now” to finish the trade.</p>
+                <h3>Boom! You Did It!</h3>
+                <p>You’ve just set up your first crypto wallet and bought $LCC! Welcome to the Lemon Club Collective crew—your coins are now in your Phantom wallet.</p>
+                <p><strong>Quick Tip:</strong> New to this? Try a tiny test swap first (like $5 worth)!</p>
+            </div>
+            <div id="forum" class="content">
+                <div class="content-header">
+                    <h2>Forum - Community</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <textarea id="postContent" maxlength="280" placeholder="Share your thoughts (max 280 chars)"></textarea>
+                <button onclick="submitPost()" data-tooltip="Submit Post">Post</button>
+                <div id="post-list"></div>
+            </div>
+            <div id="friends" class="content">
+                <div class="content-header">
+                    <h2>Lemon Club Friends</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <div class="friend-game">
+                    <h3>Big Dill On Ice!</h3>
+                    <p>Big Dill was on his way to paradise when his airplane crashed! Now he's stuck on ice in the Arctic. Help him escape in this chilly adventure!</p>
+                    <div class="game-container">
+                        <div class="game-buttons">
+                            <button class="start-game-btn" onclick="startGame('big-dill')" data-tooltip="Start Game">Start</button>
+                            <button class="stop-game-btn" onclick="stopGame('big-dill')" data-tooltip="Stop Game" style="display:none;">Stop</button>
+                            <button class="claim-victory-btn" id="claim-big-dill" onclick="claimVictory('big-dill')" data-tooltip="Claim Victory (5 min playtime)" disabled>Claim Victory</button>
+                        </div>
+                        <div class="timer-display" id="timer-big-dill">Time: 0:00</div>
+                        <iframe id="game-big-dill" data-src="https://play.rosebud.ai/p/69253929-c221-41d4-8387-b0d9f0d42267" width="100%" height="750px" frameborder="0" allowfullscreen="true" allow="autoplay; fullscreen *; xr-spatial-tracking; gamepad" style="display:none;"></iframe>
+                    </div>
+                    <p><strong>Contract Address:</strong> 2FzY24gMb55Uop8T7V1dZkFTN6z5rpMgyeanZVBmoon</p>
+                </div>
+                <hr style="border: 1px solid #ff4500; margin: 30px 0;">
+                <div class="friend-game">
+                    <h3>Lemon Club Welcomes Owl Capone!!!</h3>
+                    <p>Owl Capone: Mob boss by day, crypto bro by night! He looks after his community and manages his finances, never sleeping—staying up OWL night long to build his crypto empire. To him, meme coins are a real HOOT!</p>
+                    <div class="game-container">
+                        <div class="game-buttons">
+                            <button class="start-game-btn" onclick="startGame('owl-capone')" data-tooltip="Start Game">Start</button>
+                            <button class="stop-game-btn" onclick="stopGame('owl-capone')" data-tooltip="Stop Game" style="display:none;">Stop</button>
+                            <button class="claim-victory-btn" id="claim-owl-capone" onclick="claimVictory('owl-capone')" data-tooltip="Claim Victory (5 min playtime)" disabled>Claim Victory</button>
+                        </div>
+                        <div class="timer-display" id="timer-owl-capone">Time: 0:00</div>
+                        <iframe id="game-owl-capone" data-src="https://play.rosebud.ai/p/75a94936-a105-48f5-a59e-93e4ed89bcb9" width="100%" height="750" style="border:none; display:none;"></iframe>
+                    </div>
+                    <p><strong>Contract Address:</strong> 76BK4cu5xN8hp7cjNyHLt3gnwZUEsaEpV6h3ahyumoon</p>
+                </div>
+                <hr style="border: 1px solid #ff4500; margin: 30px 0;">
+                <div class="friend-game">
+                    <h3>Lenny the Lemon Fights Rug Pullers</h3>
+                    <p>Join Lenny the Lemon as he battles rug pullers to save the day—play for 5 minutes to claim victory!</p>
+                    <div class="game-container">
+                        <div class="game-buttons">
+                            <button class="start-game-btn" onclick="startGame('lenny-lemon')" data-tooltip="Start Game">Start</button>
+                            <button class="stop-game-btn" onclick="stopGame('lenny-lemon')" data-tooltip="Stop Game" style="display:none;">Stop</button>
+                            <button class="claim-victory-btn" id="claim-lenny-lemon" onclick="claimVictory('lenny-lemon')" data-tooltip="Claim Victory (5 min playtime)" disabled>Claim Victory</button>
+                        </div>
+                        <div class="timer-display" id="timer-lenny-lemon">Time: 0:00</div>
+                        <iframe id="game-lenny-lemon" data-src="https://play.rosebud.ai/p/c0f8cb53-6c63-49c6-bf1a-2e0e806553e4" width="100%" height="750" style="border: 0; border-radius: 10px; overflow: hidden; display:none;"></iframe>
+                    </div>
+                </div>
+                <hr style="border: 1px solid #ff4500; margin: 30px 0;">
+                <div class="friend-section">
+                    <h3>Lemon Club Welcomes Pudgy Orcas! The $PORCA!!!</h3>
+                    <p>Hunting Pudgy Penguins & spreading vibes across the meta.</p>
+                    <img src="https://raw.githubusercontent.com/LemonClubCollective/NFT/main/porca.png" alt="Porca" style="max-width: 200px;">
+                    <p><strong>Contract Address:</strong> QLEYLx27uF5C2V6k8F3Q6vqppkC6XKUBPMiirLcpump</p>
+                </div>
+                <hr style="border: 1px solid #ff4500; margin: 30px 0;">
+                <div class="friend-section">
+                    <h3>Lemon Club Welcomes Bothered Rabbit!!!</h3>
+                    <img src="https://raw.githubusercontent.com/LemonClubCollective/NFT/main/BRAB.png" alt="BRAB" style="max-width: 200px;">
+                    <p><strong>Contract Address:</strong> CVNr3XYNTp7Pwp3rKUVHrKMgn7oVbokcUbXzNopNpump</p>
+                </div>
+                <hr style="border: 1px solid #ff4500; margin: 30px 0;">
+                <div class="friend-section">
+                    <h3>Lemon Club Collective</h3>
+                    <p>CA: EK1mT7iPC9eP8wfS5QQABdNEkLVYz3dc2Tuok11naKnB</p>
+                    <p>Check us out on <strong>DEX SCREENER</strong> and follow us on <strong>X</strong>!</p>
+                </div>
+            </div>
+            <div id="quests" class="content">
+                <div class="content-header">
+                    <h2>Lemon Grove Quests</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <p>Crush these epic quests to stack up your Lemonade Points!</p>
+                <div class="quest-list" id="daily-quests"><h3>Daily Quests</h3></div>
+                <div class="quest-list" id="weekly-quests"><h3>Weekly Quests</h3></div>
+                <div class="quest-list" id="limited-quests"><h3>Monthly Quests</h3></div>
+                <div class="quest-list" style="background-color: rgba(255, 250, 205, 0.9); padding: 15px; border-radius: 10px;">
+                    <h3>🍋 Squeeze the Day: Earn Lemonade Points Like a Boss! 🍋</h3>
+                    <p>Get ready to juice up your Lemonade Points with these zesty activities! Here’s how to rack ‘em up and evolve your NFTs to legendary status:</p>
+                    <ul class="list-disc pl-5 mt-2">
+                        <li><strong>Mint a Fresh NFT:</strong> Drop a new Lemon Seed in the Garden and snag <strong>25 Minting Points</strong>. First mint of the day? Boom—<strong>+50 Bonus Points</strong>!</li>
+                        <li><strong>Stake Your Claim:</strong> Lock an NFT in the Garden for <strong>50 Staking Points</strong>. Unstake later to cash in hourly staking rewards (think 0.5 points/hour, more with multiple NFTs)!</li>
+                        <li><strong>Game On in Friends:</strong> Smash arcade games for <strong>2 Arcade Points</strong> every 5 minutes, plus <strong>25 bonus</strong> when you claim victory after 5 minutes!</li>
+                        <li><strong>Quest Blitz:</strong> Crush daily, weekly, and monthly quests for big <strong>Quest Points</strong>—rewards vary (e.g., 20 for social visits, 40 for section explorer, up to 100+ for tough ones)!</li>
+                        <li><strong>Daily Login Streak:</strong> Log in every day for <strong>5 Bonus Points</strong>, jumping to <strong>15</strong> after 5 days straight—keep the streak alive!</li>
+                        <li><strong>Newsletter Hype:</strong> Subscribe in Blog for a sweet <strong>25 Bonus Points</strong>—stay in the loop and get paid!</li>
+                    </ul>
+                    <p class="mt-2">Score <strong>1,000 Lemonade Points</strong> to evolve your NFT to the next stage—Seed to Sprout to Sapling to Tree! Check your stash in Profile and spend ‘em wisely!</p>
+                </div>
+            </div>
+            <div id="profile" class="content">
+                <div class="content-header">
+                    <h2>Your Profile</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                       <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+              <div id="profile-info"><p>Please login to view your profile!</p></div>
+                <div id="profile-upload">
+                    <input type="file" id="profile-pic-upload" accept="image/*">
+                    <button onclick="uploadProfilePic()" data-tooltip="Upload Profile Picture">Upload</button>
+                </div>
+                <button onclick="subscribe()" data-tooltip="Subscribe to Premium ($10/month)">Subscribe to Premium ($10/month)</button>
+                <div id="profile-pic-options" style="margin-top: 20px;"></div>
+                <div id="profile-pic-history" style="margin-top: 20px;"><h3>Your Profile Pic History</h3><div id="profile-pic-history-list"></div></div>
+            </div>
+            <div id="blog" class="content">
+                <div class="content-header">
+                    <h2>Lemon Club Blog & Newsletter</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <div id="blog-posts"></div>
+                <div class="auth-container">
+                    <h3>Subscribe to Newsletter</h3>
+                    <input type="email" id="newsletter-email" placeholder="Your Email">
+                    <button onclick="subscribeNewsletter()" data-tooltip="Subscribe">Subscribe</button>
+                </div>
+            </div>
+            <div id="support" class="content">
+                <div class="content-header">
+                    <h2>Support Desk</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <h3>Submit a Support Ticket</h3>
+                <form class="support-form" onsubmit="submitTicket(event)">
+                    <label>Name: <input type="text" id="ticketName" required></label>
+                    <label>Email: <input type="email" id="ticketEmail" required></label>
+                    <label>Message: <textarea id="ticketMessage" required></textarea></label>
+                    <button type="submit" data-tooltip="Submit Ticket">Submit</button>
+                </form>
+            </div>
+            <div id="store" class="content">
+                <div class="content-header">
+                    <h2>Merch Store</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <div id="product-list"></div>
+            </div>
+            <div id="videos" class="content">
+                <div class="content-header">
+                    <h2>Lemon Club Videos</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <div id="video-list"></div>
+            </div>
+            <div id="admin" class="content">
+                <div class="content-header">
+                    <h2>Admin Portal</h2>
+                    <div class="social-links">
+                        <a href="https://discord.gg/uvpCGdxwU4" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/discordlogo.png" alt="Discord" class="social-icon">
+                        </a>
+                        <a href="https://t.me/c/2271932098/35" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/telegramlogo.png" alt="Telegram" class="social-icon">
+                        </a>
+                        <a href="https://www.youtube.com/@LemonClubCollective" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/youtube.png" alt="YouTube" class="social-icon">
+                        </a>
+                        <a href="https://www.facebook.com/groups/1170961554633456" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/facebooklogo.png" alt="Facebook" class="social-icon">
+                        </a>
+                        <a href="https://x.com/LemonClubCoin" target="_blank" onclick="trackSocialVisit()">
+                            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/xlogo.png" alt="X" class="social-icon">
+                        </a>
+                    </div>
+                </div>
+                <div id="admin-content"><p>Please login as an admin to access this section!</p></div>
+                <div id="admin-permissions" style="display: none;">
+                    <h3>Manage User Permissions</h3>
+                    <input type="text" id="admin-username" placeholder="Enter Username">
+                    <label><input type="checkbox" id="admin-isAdmin"> Set as Admin</label>
+                    <label><input type="checkbox" id="admin-canPostBlogs"> Can Post Blogs</label>
+                    <label><input type="checkbox" id="admin-canPostVideos"> Can Post Videos</label>
+                    <label><input type="checkbox" id="admin-canDeletePosts"> Can Delete Posts</label>
+                    <label><input type="checkbox" id="admin-canDeleteBlogs"> Can Delete Blogs</label>
+                    <label><input type="checkbox" id="admin-canDeleteVideos"> Can Delete Videos</label>
+                    <button onclick="updateUserPermissions()">Update Permissions</button>
+                </div>
+                <div id="admin-upload" style="display: none;">
+                    <h3>Post a Blog</h3>
+                    <input type="text" id="blog-title" placeholder="Blog Title">
+                    <textarea id="blog-content" placeholder="Blog Content"></textarea>
+                    <button onclick="postBlog()" data-tooltip="Post Blog">Post Blog</button>
+                    <h3>Upload a Video</h3>
+                    <input type="text" id="video-title" placeholder="Video Title">
+                    <input type="text" id="video-desc" placeholder="Video Description">
+                    <input type="file" id="video-upload" accept="video/*">
+                    <button onclick="uploadVideo()" data-tooltip="Upload Video">Upload Video</button>
+                </div>
+            </div>
+            <footer>
+                <p>© 2025 Lemon Club Collective | All Rights Reserved | <a href="https://lemonclubcollective.com" style="color: #ff4500;">Visit Our Site</a> | <a href="/terms.html" style="color: #ff4500;">Terms</a> | <a href="/privacy.html" style="color: #ff4500;">Privacy</a></p>
+            </footer>
+        </div>
+    </div>
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="/solana-web3.js" onload="window.solanaWeb3 = window.solanaWeb3 || {}; window.solanaWeb3Loaded = true; console.log('Solana Web3 loaded locally, global:', window.solanaWeb3)" onerror="console.error('Failed to load Solana Web3 locally:', event)"></script>
+    <script src="/node_modules/big-integer/big-integer.js" onload="console.log('bigInt loaded locally'); window.BigInteger = bigInt;" onerror="console.error('bigInt load failed');"></script>
+    <script>
+        // Inline minimal Buffer polyfill
+        if (!window.Buffer) {
+            window.Buffer = function Buffer(arg) {
+                if (typeof arg === 'string') {
+                    return new Uint8Array([...arg].map(char => char.charCodeAt(0)));
+                } else if (arg instanceof Uint8Array) {
+                    return arg;
+                }
+                throw new Error('Buffer constructor not fully implemented');
+            };
+            window.Buffer.from = function from(str, encoding) {
+                if (encoding === 'base64') {
+                    const binaryString = atob(str);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    return bytes;
+                } else if (encoding === 'utf8' || !encoding) {
+                    return new Uint8Array([...str].map(char => char.charCodeAt(0)));
+                }
+                throw new Error('Encoding not supported');
+            };
+            console.log('Inline Buffer polyfill loaded');
+        }
+        // Debug templating issues
+        window.addEventListener('error', (event) => {
+            if (event && event.message && typeof event.message === 'string' && event.message.includes('404')) {
+                console.error('404 Error on URL:', event.filename, 'Line:', event.lineno, 'Message:', event.message);
+            } else {
+                console.error('Error event:', event);
+            }
+        }, true);
+    </script>
+    <script src="https://unpkg.com/@solana/web3.js@1.91.1/lib/index.iife.js"></script>
+    <script>
+        console.log('[Script] Checking for mintNFT overrides...');
+        if (typeof window.mintNFT !== 'undefined') console.log('[Script] WARNING: mintNFT already defined!');
+    </script>
+    <script>
+        console.log('Debug script executed before Solana Web3 load');
+    </script>
+    <script>
+        const port = 3001; // Define the port client-side
+
+        const gameTimers = {};
+        let startTime = null;
+        let profilePicHistory = [];
+        let loggedInUsername = null;
+        let loggedInProfilePic = null;
+        let lemonadePoints = bigInt("0");
+        let stakingPoints = bigInt("0");
+        let arcadePoints = bigInt("0");
+        let questPoints = bigInt("0");
+        let mintingPoints = bigInt("0");
+        let bonusPoints = bigInt("0");
+        let isAdmin = false;
+        let walletAddress = null;
+        let lastScrollTop = 0;
+        const gamePlaytimes = { 'big-dill': 0, 'owl-capone': 0, 'lenny-lemon': 0 };
+        const stripeClient = Stripe('pk_test_51Qxc9v03zQcNJCYZZPxGZKDuXZvINOWJA93uOptLggu4UtWPdTHfGfTKXf6TaGzsPFkLdDv2helvmmMBEopNijvO00EprZqruE');
+        let loginStreak = 0;
+        let lastLogin = null;
+        let postsToday = 0;
+        let socialVisitsToday = 0;
+        let arcadePlayToday = 0;
+        let sectionsVisitedToday = new Set();
+        const profilePics = [
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP2.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP3.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP4.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP5.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP6.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP7.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP8.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP9.png',
+            'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP10.png'
+        ];
+
+            function initBigIntegerVars() {
+            if (typeof BigInteger === 'undefined') {
+                console.error('BigInteger not available—check local install');
+                return;
+            }
+            lemonadePoints = BigInteger(0);
+            stakingPoints = BigInteger(0);
+            arcadePoints = BigInteger(0);
+            questPoints = BigInteger(0);
+            mintingPoints = BigInteger(0);
+            bonusPoints = BigInteger(0);
+            console.log('BigInteger variables initialized');
+        }
+
+        if (typeof BigInteger !== 'undefined') {
+            initBigIntegerVars();
+        } else {
+            console.error('BigInteger not loaded yet—waiting...');
+        }
+
+        function toggleWalletConnection() {
+            const connectBtn = document.getElementById('connect-wallet-btn');
+            const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
+            if (!connectBtn && !connectBtnStaking) {
+                console.error('Connect Wallet button(s) not found');
+                return;
+            }
+            const button = connectBtn || connectBtnStaking; // Use whichever button exists
+            if (walletAddress) {
+                // Disconnect wallet
+                walletAddress = null;
+                button.textContent = 'Connect Solana Wallet';
+                document.getElementById('wallet-status').textContent = 'Wallet not connected';
+            } else {
+                // Connect wallet (simplified for this example)
+                walletAddress = 'mockWalletAddress'; // Replace with actual wallet connection logic
+                button.textContent = 'Disconnect Wallet';
+                document.getElementById('wallet-status').textContent = `Wallet: ${walletAddress.substring(0, 6)}...`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Debug roadmap image load
+            const roadmapImg = document.querySelector('.roadmap-img');
+            if (roadmapImg) {
+                roadmapImg.onerror = () => {
+                    console.error('Roadmap image failed to load:', roadmapImg.src);
+                    roadmapImg.src = 'https://via.placeholder.com/500?text=Roadmap+Image+Not+Found';
+                };
+                roadmapImg.onload = () => console.log('Roadmap image loaded successfully:', roadmapImg.src);
+            }
+
+            // Set up scroll event for header
+            window.addEventListener('scroll', function() {
+                const header = document.querySelector('.header');
+                let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                if (scrollTop > lastScrollTop) header.classList.add('header-hidden');
+                else header.classList.remove('header-hidden');
+                lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+            });
+
+            // Initialize UI elements
+            document.getElementById('splash-page').style.display = 'block';
+            document.getElementById('main-site').style.display = 'none';
+            if (window.solana && window.solana.isConnected) toggleWalletConnection();
+            updateAuthButton();
+            updateProfileIcon();
+            updateQuestsDisplay();
+            updatePointsDisplay();
+
+            // Set up registration button logic
+            const regTos = document.getElementById('regTos');
+            const regRisk = document.getElementById('regRisk');
+            if (regTos) regTos.addEventListener('change', updateRegisterButton);
+            if (regRisk) regRisk.addEventListener('change', updateRegisterButton);
+        });
+
+        async function showContent(sectionId) {
+            console.log(`showContent called with: ${sectionId}`);
+            if ((sectionId === 'profile' || sectionId === 'videos' || sectionId === 'staking' || sectionId === 'admin') && !loggedInUsername) {
+                sectionId = 'home';
+            }
+            document.querySelectorAll('.content').forEach(content => content.classList.remove('active'));
+            const contentElement = document.getElementById(sectionId);
+            if (contentElement) {
+                contentElement.classList.add('active');
+                document.getElementById('splash-page').style.display = 'none';
+                document.getElementById('main-site').style.display = 'block';
+                if (sectionId === 'staking' && loggedInUsername) {
+                    await updateNFTDisplay('nft-info');
+                } else if (sectionId === 'forum') {
+                    updatePostsDisplay();
+                } else if (sectionId === 'quests') {
+                    updateQuestsDisplay();
+                } else if (sectionId === 'profile' && loggedInUsername) {
+                    updateProfileDisplay();
+                } else if (sectionId === 'store') {
+                    loadProducts();
+                } else if (sectionId === 'blog') {
+                    updateBlogPosts();
+                } else if (sectionId === 'videos' && loggedInUsername) {
+                    updateVideoList();
+                } else if (sectionId === 'admin' && loggedInUsername) {
+                    updateAdminDisplay();
+                }
+            }
+            if (sectionId !== 'friends') stopAllGameTimers();
+            document.querySelectorAll('.building').forEach(building => building.classList.remove('active'));
+            const activeBuilding = document.getElementById(`building-${sectionId}`);
+            if (activeBuilding) activeBuilding.classList.add('active');
+            const menuContainer = document.getElementById('menu-container');
+            if (sectionId === 'what-is-lcc') {
+                menuContainer.classList.remove('active');
+            } else {
+                menuContainer.classList.add('active');
+            }
+            if (loggedInUsername && sectionId !== 'quests') trackSectionVisit(sectionId);
+        }
+
+        function toggleAuth() {
+            if (loggedInUsername) logout();
+            else showContent('home');
+        }
+
+        async function login() {
+            console.log('[Login] Login button clicked');
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            console.log('[Login] Username:', username, 'Password:', password);
+            if (!username || !password) {
+                alert('Please enter username and password!');
+                return;
+            }
+            try {
+                const response = await fetch(`http://localhost:${port}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    loggedInUsername = username.toLowerCase();
+                    loggedInProfilePic = result.profilePic || 'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP1.png';
+                    isAdmin = result.isAdmin || false;
+                    lemonadePoints = bigInt(result.lemonadePoints || "0");
+                    stakingPoints = bigInt(result.stakingPoints || "0");
+                    arcadePoints = bigInt(result.arcadePoints || "0");
+                    questPoints = bigInt(result.questPoints || "0");
+                    mintingPoints = bigInt(result.mintingPoints || "0");
+                    bonusPoints = bigInt(result.bonusPoints || "0");
+                    updateAuthButton();
+                    updateProfileIcon();
+                    updatePointsDisplay();
+                    document.getElementById('login-status').textContent = `Logged in as ${username}`;
+                    document.getElementById('loginUsername').value = '';
+                    document.getElementById('loginPassword').value = '';
+                    showContent('profile');
+                    await updateProfileDisplay();
+                    alert('Login successful!');
+                    trackLoginStreak();
+                } else {
+                    alert(result.error || 'Login failed');
+                }
+            } catch (error) {
+                console.error('[Login] Error:', error);
+                alert('Login failed: ' + error.message);
+            }
+        }
+
+        function logout() {
+            loggedInUsername = null;
+            loggedInProfilePic = null;
+            isAdmin = false;
+            lemonadePoints = bigInt(0);
+            stakingPoints = bigInt(0);
+            arcadePoints = bigInt(0);
+            questPoints = bigInt(0);
+            mintingPoints = bigInt(0);
+            bonusPoints = bigInt(0);
+            disconnectWallet();
+            updateAuthButton();
+            updateProfileIcon();
+            updatePointsDisplay();
+            document.getElementById('login-status').textContent = 'Not logged in';
+            showContent('home');
+            alert('Logged out successfully!');
+        }
+
+        async function register() {
+            const email = document.getElementById('regEmail').value.trim();
+            const username = document.getElementById('regUsername').value.trim();
+            const password = document.getElementById('regPassword').value.trim();
+            const tosChecked = document.getElementById('regTos').checked;
+            const riskChecked = document.getElementById('regRisk').checked;
+            const emailConsent = document.getElementById('regEmailConsent').checked;
+            if (!email || !username || !password || !tosChecked || !riskChecked) {
+                alert("Please fill all fields and agree to the terms!");
+                return;
+            }
+            const response = await fetch('http://localhost:3001/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, username, password, emailConsent })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                alert('Registration successful! Check your email to verify your account.');
+                document.getElementById('regEmail').value = '';
+                document.getElementById('regUsername').value = '';
+                document.getElementById('regPassword').value = '';
+                document.getElementById('regTos').checked = false;
+                document.getElementById('regRisk').checked = false;
+                document.getElementById('regEmailConsent').checked = false;
+                document.getElementById('registerBtn').disabled = true;
+            } else {
+                alert(result.error || 'Failed to register');
+            }
+        }
+
+        async function toggleWalletConnection() {
+            console.log('toggleWalletConnection called');
+            const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
+            if (!connectBtnStaking) {
+                console.error('Connect Wallet button not found');
+                return;
+            }
+            if (walletAddress) {
+                disconnectWallet();
+            } else if ('solana' in window) {
+                console.log('Solana object found:', window.solana);
+                const provider = window.solana;
+                try {
+                    if (!provider.isConnected) await provider.connect();
+                    walletAddress = provider.publicKey.toString();
+                    connectBtnStaking.textContent = 'Disconnect Solana Wallet';
+                    console.log('Updated button text to Disconnect Solana Wallet');
+                    document.getElementById('wallet-status').textContent = `Wallet: ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+                    console.log('Wallet connected:', walletAddress);
+                } catch (error) {
+                    console.error('[Wallet] Connection failed:', error);
+                    alert('Wallet connection failed—check Phantom: ' + error.message);
+                }
+            } else {
+                alert('Install Phantom wallet!');
+                window.open('https://phantom.app/', '_blank');
+            }
+        }
+
+        function disconnectWallet() {
+            if (window.solana) window.solana.disconnect();
+            walletAddress = null;
+            const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
+            if (connectBtnStaking) connectBtnStaking.textContent = 'Connect Solana Wallet';
+            document.getElementById('wallet-status').textContent = 'Wallet not connected';
+        }
+
+        function updateAuthButton() {
+            document.getElementById('auth-btn').textContent = loggedInUsername ? 'Logout' : 'Login';
+        }
+
+        function updateProfileIcon() {
+            const profileIcon = document.getElementById('profile-icon');
+            if (profileIcon) {
+                profileIcon.src = loggedInProfilePic || 'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP1.png';
+                console.log('[ProfileIcon] Updated to:', profileIcon.src);
+            } else {
+                console.error('[ProfileIcon] Element not found');
+            }
+        }
+
+        async function subscribe() {
+            if (!loggedInUsername) {
+                alert('Please login to subscribe!');
+                return;
+            }
+            const response = await fetch('http://localhost:3001/create-subscription', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: loggedInUsername })
+            });
+            const result = await response.json();
+            if (response.ok && result.success && result.clientSecret) {
+                const { error } = await stripeClient.redirectToCheckout({ sessionId: result.clientSecret });
+                if (error) alert('Error during Stripe checkout: ' + error.message);
+            } else {
+                alert(result.error || 'Failed to create subscription');
+            }
+        }
+
+        async function loadProducts() {
+            const response = await fetch('http://localhost:3001/printify-products');
+            const data = await response.json();
+            if (response.ok && data.success && data.data.length > 0) {
+                let html = '';
+                data.data.forEach(product => {
+                    html += `<div class="nft-card"><img id="product-img-${product.id}" alt="${product.title}" style="max-width: 200px;"><p>${product.title} - $${product.variants[0].price / 100}</p><button onclick="buyMerch('${product.id}', ${product.variants[0].price / 100})">Buy with Crypto</button></div>`;
+                });
+                document.getElementById('product-list').innerHTML = html;
+
+                data.data.forEach(product => {
+                    const img = document.getElementById(`product-img-${product.id}`);
+                    if (product.images && product.images[0] && product.images[0].src) {
+                        img.src = product.images[0].src;
+                    } else {
+                        img.src = 'https://via.placeholder.com/200';
+                    }
+                });
+            } else {
+                document.getElementById('product-list').innerHTML = `<p>${data.message || 'No products available yet'}</p>`;
+            }
+        }
+
+        async function buyMerch(productId, price) {
+            if (!walletAddress) {
+                alert('Connect Solana wallet to buy!');
+                return;
+            }
+            const address = prompt('Enter shipping address (name, street, city, state, zip, country):');
+            if (!address) return;
+            const chargeResponse = await fetch('http://localhost:3001/create-charge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: loggedInUsername, amount: price })
+            });
+            const chargeResult = await chargeResponse.json();
+            if (chargeResponse.ok && chargeResult.success) {
+                window.open(chargeResult.chargeUrl, '_blank');
+                const orderResponse = await fetch('http://localhost:3001/printify-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: loggedInUsername, productId, address })
+                });
+                const orderResult = await orderResponse.json();
+                if (orderResult.success) alert('Order placed! ID: ' + orderResult.orderId);
+            } else {
+                alert(chargeResult.error || 'Failed to create charge');
+            }
+        }
+
+        async function uploadProfilePic() {
+            if (!loggedInUsername) {
+                alert('Please login to upload a profile picture!');
+                return;
+            }
+            const fileInput = document.getElementById('profile-pic-upload');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select an image to upload!');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('profilePic', file);
+            const response = await fetch(`http://localhost:3001/upload-profile-pic/${loggedInUsername}`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                loggedInProfilePic = result.profilePicUrl;
+                profilePicHistory.push(loggedInProfilePic);
+                document.getElementById('profile-icon').src = loggedInProfilePic;
+                fileInput.value = '';
+                updateProfileDisplay();
+                alert('Profile picture uploaded successfully!');
+            } else {
+                alert(result.error || 'Failed to upload profile picture');
+            }
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs < 10 ? '0' + secs : secs}`;
+        }
+
+        async function startGame(gameId) {
+            if (!loggedInUsername) {
+                alert('Please login to play games!');
+                return;
+            }
+            stopAllGameTimers();
+            const iframe = document.getElementById(`game-${gameId}`);
+            const startBtn = iframe.parentElement.querySelector('.start-game-btn');
+            const stopBtn = iframe.parentElement.querySelector('.stop-game-btn');
+            const timerDisplay = document.getElementById(`timer-${gameId}`);
+            startBtn.style.display = 'none';
+            stopBtn.style.display = 'inline-block';
+            iframe.src = iframe.getAttribute('data-src');
+            iframe.style.display = 'block';
+            startTime = new Date();
+            let secondsElapsed = 0;
+            timerDisplay.textContent = `Time: ${formatTime(secondsElapsed)}`;
+            gameTimers[gameId] = setInterval(() => {
+                secondsElapsed = Math.floor((new Date() - startTime) / 1000);
+                timerDisplay.textContent = `Time: ${formatTime(secondsElapsed)}`;
+            }, 1000);
+        }
+
+        async function stopGame(gameId) {
+            const iframe = document.getElementById(`game-${gameId}`);
+            const startBtn = iframe.parentElement.querySelector('.start-game-btn');
+            const stopBtn = iframe.parentElement.querySelector('.stop-game-btn');
+            const timerDisplay = document.getElementById(`timer-${gameId}`);
+            if (gameTimers[gameId]) {
+                clearInterval(gameTimers[gameId]);
+                delete gameTimers[gameId];
+                const secondsElapsed = Math.floor((new Date() - startTime) / 1000);
+                const minutesPlayed = Math.floor(secondsElapsed / 60);
+                timerDisplay.textContent = `Time: ${formatTime(secondsElapsed)}`;
+                console.log(`[StopGame] Played for ${secondsElapsed} seconds, ${minutesPlayed} minutes`);
+                if (minutesPlayed > 0) await updatePlaytime(minutesPlayed);
+                if (minutesPlayed >= 5) document.getElementById(`claim-${gameId}`).disabled = false;
+                startTime = null;
+            }
+            iframe.style.display = 'none';
+            iframe.src = '';
+            startBtn.style.display = 'inline-block';
+            stopBtn.style.display = 'none';
+        }
+
+        async function updatePlaytime(minutes) {
+            if (!loggedInUsername) return;
+            const response = await fetch(`http://localhost:3001/playtime/${loggedInUsername}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ minutes })
+            });
+            const result = await response.json();
+            if (result.success) {
+                arcadePoints = bigInt(result.arcadePoints || "0");
+                lemonadePoints = bigInt(result.lemonadePoints || "0");
+                updatePointsDisplay();
+                updateProfileDisplay();
+            }
+        }
+
+        async function stopAllGameTimers() {
+            Object.keys(gameTimers).forEach(async gameId => await stopGame(gameId));
+        }
+
+        async function claimVictory(gameId) {
+            if (!loggedInUsername) {
+                alert('Please login to claim victory!');
+                return;
+            }
+            const response = await fetch(`http://localhost:3001/claim-victory/${loggedInUsername}/${gameId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                const claimBtn = document.getElementById(`claim-${gameId}`);
+                claimBtn.textContent = 'Claimed!';
+                claimBtn.disabled = true;
+                arcadePoints = arcadePoints.add(25);
+                lemonadePoints = lemonadePoints.add(25);
+                updatePointsDisplay();
+                await updateQuestProgressClient('arcade-master', 'weekly', 1);
+                alert('Victory claimed successfully! +25 Arcade Points');
+            } else {
+                alert(result.error || 'Failed to claim victory');
+            }
+        }
+
+        async function fetchVictoryClaims() {
+            if (!loggedInUsername) return;
+            const response = await fetch(`http://localhost:3001/profile/${loggedInUsername}`);
+            const data = await response.json();
+            if (data.success) {
+                ['big-dill', 'owl-capone', 'lenny-lemon'].forEach(gameId => {
+                    const claimBtn = document.getElementById(`claim-${gameId}`);
+                    if (claimBtn && data.arcadePoints >= 25) {
+                        claimBtn.textContent = 'Claimed!';
+                        claimBtn.disabled = true;
+                    }
+                });
+            }
+        }
+
+        async function submitTicket(event) {
+            event.preventDefault();
+            const name = document.getElementById('ticketName').value.trim();
+            const email = document.getElementById('ticketEmail').value.trim();
+            const message = document.getElementById('ticketMessage').value.trim();
+            if (!name || !email || !message) {
+                alert('Please fill all fields!');
+                return;
+            }
+            const response = await fetch('http://localhost:3001/submit-ticket', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, message })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                alert('Ticket submitted successfully! Ticket #' + result.ticketId);
+                document.getElementById('ticketName').value = '';
+                document.getElementById('ticketEmail').value = '';
+                document.getElementById('ticketMessage').value = '';
+            } else {
+                alert(result.error || 'Failed to submit ticket');
+            }
+        }
+
+        async function updateNFTDisplay(containerId, showButtons = true) {
+            if (!loggedInUsername) {
+                document.getElementById(containerId).innerHTML = '<p>Please login to manage your Lemon NFTs!</p>';
+                return;
+            }
+            const response = await fetch(`http://localhost:3001/nft/${loggedInUsername.toLowerCase()}`, { method: 'GET' });
+            const data = await response.json();
+            console.log('[NFTs] Received from server:', data);
+            if (response.ok && data.success) {
+                const nfts = data.nfts || [];
+                if (nfts.length === 0) {
+                    document.getElementById(containerId).innerHTML = '<p>No NFTs yet—mint one to start growing!</p>';
+                    return;
+                }
+                let html = '';
+                nfts.forEach(nft => {
+                    const stageName = nft.name || 'Lemon Seed';
+                    const mintAddress = nft.mintAddress;
+                    const imageUri = nft.imageUri ? nft.imageUri.replace('3000', '3001') : `http://localhost:3001/output/nft_${Date.now()}.png`;
+                    const staked = nft.staked || false;
+                    console.log(`[NFT Display] NFT ${mintAddress} staked: ${staked}`);
+                    const baseStageName = stageName.split('#')[0].trim();
+                    const canEvolve = (typeof lemonadePoints.gte === 'function' ? lemonadePoints.gte(10) : Number(lemonadePoints) >= 10) && baseStageName !== 'Lemon Tree';
+                    html += `<div class="nft-card ${staked ? 'staked' : ''}">
+                        <img id="nft-img-${mintAddress}" alt="${stageName}" src="${imageUri}" 
+                            onerror="this.onerror=null; this.src='https://raw.githubusercontent.com/LemonClubCollective/NFT/main/seed.png'; console.log('NFT image failed:', '${imageUri}')" 
+                            style="max-width: 200px;">
+                        <p>${stageName}</p>
+                        <p>Mint Address: ${mintAddress.slice(0, 8)}...</p>
+                        <div class="nft-card-buttons">`;
+                    if (showButtons) {
+                        html += `<button class="nft-card-button ${staked ? 'unstake-btn' : 'stake-btn'}" 
+                            onclick="${staked ? 'unstakeNFT' : 'stakeNFT'}('${mintAddress}')">
+                            ${staked ? 'Unstake' : 'Stake'}
+                        </button>`;
+                        html += `<button class="nft-card-button evolve-btn" onclick="evolveNFT('${mintAddress}', this)" 
+                            ${canEvolve ? '' : 'disabled'}>Evolve</button>`;
+                    }
+                    html += '</div></div>';
+                });
+                console.log('[NFT Display] Generated HTML:', html);
+                document.getElementById(containerId).innerHTML = html;
+            } else {
+                document.getElementById(containerId).innerHTML = '<p>Error loading NFTs—try again!</p>';
+            }
+        }
+
+        async function claimQuest(type, questId) {
+            fetch(`/quests/${loggedInUsername}/claim`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ questId, type })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`Claimed ${data.reward} points!`);
+                        updateQuestsDisplay();
+                    } else {
+                        alert('Failed to claim reward: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('[ClaimQuest] Error:', error);
+                    alert('Failed to claim reward');
+                });
+        }
+
+        async function postBlog() {
+            if (!loggedInUsername || !isAdmin) {
+                alert('Admin login required to post blogs!');
+                return;
+            }
+            const title = document.getElementById('blog-title').value.trim();
+            const content = document.getElementById('blog-content').value.trim();
+            if (!title || !content) {
+                alert('Please enter both title and content!');
+                return;
+            }
+            const postButton = document.querySelector('button[onclick="postBlog()"]');
+            postButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/blog-posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content, username: loggedInUsername })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    alert('Blog posted successfully!');
+                    document.getElementById('blog-title').value = '';
+                    document.getElementById('blog-content').value = '';
+                    updateBlogPosts();
+                } else {
+                    alert(result.error || 'Failed to post blog');
+                }
+            } catch (error) {
+                console.error('[PostBlog] Error:', error);
+                alert('Failed to post blog: ' + error.message);
+            } finally {
+                postButton.disabled = false;
+            }
+        }
+
+        async function uploadVideo() {
+            if (!loggedInUsername || !isAdmin) {
+                alert('Admin access required to upload videos!');
+                return;
+            }
+            const fileInput = document.getElementById('video-upload');
+            const titleInput = document.getElementById('video-title');
+            const descInput = document.getElementById('video-desc');
+            if (!fileInput.files[0]) {
+                alert('Please select a video file!');
+                return;
+            }
+            const fileSizeMB = fileInput.files[0].size / (1024 * 1024);
+            console.log(`[Video Upload] File size: ${fileSizeMB} MB`);
+            if (fileSizeMB > 1024) {
+                alert('File size exceeds 1GB limit!');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('video', fileInput.files[0]);
+            formData.append('title', titleInput.value);
+            formData.append('description', descInput.value);
+
+            const uploadButton = document.querySelector('button[onclick="uploadVideo()"]');
+            uploadButton.disabled = true;
+            try {
+                const response = await fetch(`http://localhost:${port}/upload-video`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                console.log('[Video Upload] Response:', result);
+                if (response.ok && result.success) {
+                    alert('Video uploaded successfully!');
+                    updateVideoList();
+                    titleInput.value = '';
+                    descInput.value = '';
+                    fileInput.value = '';
+                } else {
+                    alert(result.error || 'Failed to upload video');
+                }
+            } catch (error) {
+                console.error('[VideoUpload] Error:', error);
+                alert('Failed to upload video: ' + error.message);
+            } finally {
+                uploadButton.disabled = false;
+            }
+        }
+
+        async function deleteVideo(id) {
+            if (!isAdmin) {
+                alert('Admin access required to delete videos!');
+                return;
+            }
+            const deleteButton = document.querySelector(`button[onclick="deleteVideo('${id}')"]`);
+            deleteButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/delete-video', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    alert('Video deleted successfully!');
+                    await updateVideoList();
+                } else {
+                    alert(result.error || 'Failed to delete video');
+                }
+            } catch (error) {
+                console.error('[DeleteVideo] Error:', error);
+                alert('Failed to delete video: ' + error.message);
+            } finally {
+                deleteButton.disabled = false;
+            }
+        }
+
+        async function deleteBlog(id) {
+            if (!isAdmin) {
+                alert('Admin access required to delete blogs!');
+                return;
+            }
+            const deleteButton = document.querySelector(`button[onclick="deleteBlog('${id}')"]`);
+            if (deleteButton) deleteButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/delete-blog', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    alert('Blog deleted successfully!');
+                    await updateBlogPosts();
+                } else {
+                    alert(result.error || 'Failed to delete blog');
+                }
+            } catch (error) {
+                console.error('[DeleteBlog] Error:', error);
+                alert('Failed to delete blog: ' + error.message);
+            } finally {
+                if (deleteButton) deleteButton.disabled = false;
+            }
+        }
+
+        async function updateVideoList() {
+            const response = await fetch('http://localhost:3001/videos');
+            const data = await response.json();
+            console.log('[Videos] Server response:', data);
+            if (response.ok && data.success) {
+                let html = '';
+                if (data.videos && data.videos.length > 0) {
+                    const sortedVideos = [...data.videos].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    sortedVideos.forEach(video => {
+                        const videoUrl = video.url || 'https://via.placeholder.com/500x300.mp4?text=Video+Not+Found';
+                        html += `<div class="video-card" data-video-id="${video._id}"><h3>${video.title}</h3><video controls><source src="${videoUrl}" type="video/mp4">Your browser does not support the video tag.</video><p>${video.description}</p><p><small>Uploaded on: ${new Date(video.timestamp).toLocaleString()}</small></p>`;
+                        if (isAdmin) html += `<button onclick="deleteVideo('${video._id}')" data-tooltip="Delete Video">Delete</button>`;
+                        html += `</div>`;
+                    });
+                    document.getElementById('video-list').innerHTML = html;
+                } else {
+                    document.getElementById('video-list').innerHTML = '<p>No videos yet—upload one in Admin!</p>';
+                }
+            } else {
+                console.error('[Videos] Fetch failed:', data.error || 'Unknown error');
+                document.getElementById('video-list').innerHTML = '<p>Error loading videos—check server!</p>';
+            }
+        }
+
+        async function updateBlogPosts() {
+            const response = await fetch('http://localhost:3001/blog-posts');
+            const data = await response.json();
+            if (response.ok && data.success) {
+                let html = '';
+                data.posts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).forEach(post => {
+                    const postDate = new Date(post.timestamp);
+                    if (isNaN(postDate.getTime())) {
+                        console.error(`[UpdateBlogPosts] Invalid timestamp for post: ${post.timestamp}`);
+                        return;
+                    }
+                    html += `<div class="post-card" data-blog-id="${post._id}"><h3>${post.title}</h3><p>${post.content}</p><p><small>Posted on: ${postDate.toLocaleString()}</small></p>`;
+                    if (isAdmin) html += `<button onclick="deleteBlog('${post._id}')" data-tooltip="Delete Blog">Delete</button>`;
+                    html += `</div>`;
+                });
+                document.getElementById('blog-posts').innerHTML = html || '<p>No blog posts yet!</p>';
+            } else {
+                document.getElementById('blog-posts').innerHTML = '<p>No blog posts yet!</p>';
+            }
+        }
+
+        async function deletePost(postId) {
+            if (!isAdmin) return alert('Admin access required!');
+            const response = await fetch('http://localhost:3001/delete-post', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ postId })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                alert('Post deleted successfully!');
+                updatePostsDisplay();
+            } else {
+                alert(result.error || 'Failed to delete post');
+            }
+        }
+
+        async function updateProfileDisplay() {
+            if (!loggedInUsername) {
+                document.getElementById('profile-info').innerHTML = '<p>Please login to view your profile!</p>';
+                document.getElementById('profile-pic-options').innerHTML = '';
+                document.getElementById('profile-pic-history-list').innerHTML = '';
+                return;
+            }
+            const response = await fetch(`http://localhost:3001/profile/${loggedInUsername}`);
+            const data = await response.json();
+            console.log('[Profile] Fetched data:', data);
+            if (response.ok && data.success) {
+                lemonadePoints = bigInt(data.lemonadePoints || "0");
+                stakingPoints = bigInt(data.stakingPoints || "0");
+                arcadePoints = bigInt(data.arcadePoints || "0");
+                questPoints = bigInt(data.questPoints || "0");
+                mintingPoints = bigInt(data.mintingPoints || "0");
+                bonusPoints = bigInt(data.bonusPoints || "0");
+                loggedInProfilePic = data.profilePic ? `http://localhost:3001${data.profilePic}` : 'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP1.png';
+                console.log('[Profile] loggedInProfilePic set to:', loggedInProfilePic);
+                let html = `
+                    <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='http://localhost:3001/public/placeholder.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
+                    <p>Username: ${loggedInUsername}</p>
+                    <p>Lemonade Points: ${lemonadePoints.toString()}</p>
+                    <p>Staking Points: ${stakingPoints.toString()}</p>
+                    <p>Arcade Points: ${arcadePoints.toString()}</p>
+                    <p>Quest Points: ${questPoints.toString()}</p>
+                    <p>Minting Points: ${mintingPoints.toString()}</p>
+                    <p>Bonus Points: ${bonusPoints.toString()}</p>
+                `;
+                document.getElementById('profile-info').innerHTML = html;
+
+                let optionsHtml = '<h3>Choose a Profile Pic</h3>';
+                profilePics.forEach((pic, index) => {
+                    optionsHtml += `<img id="profile-pic-option-${index}" class="profile-pic-option ${pic === loggedInProfilePic ? 'selected' : ''}" onclick="selectProfilePic('${pic}')" src="${pic}" alt="Profile Pic Option ${index + 1}">`;
+                });
+                document.getElementById('profile-pic-options').innerHTML = optionsHtml;
+
+                let historyHtml = '';
+                if (profilePicHistory.length > 0) {
+                    profilePicHistory.forEach((pic, index) => {
+                        historyHtml += `<img id="profile-pic-history-${index}" class="profile-pic-option ${pic === loggedInProfilePic ? 'selected' : ''}" onclick="selectProfilePic('${pic}')" src="${pic}" alt="Previous Profile Pic ${index + 1}">`;
+                    });
+                } else {
+                    historyHtml = '<p>No previous profile pics yet!</p>';
+                }
+                document.getElementById('profile-pic-history-list').innerHTML = historyHtml;
+                updateProfileIcon();
+                updatePointsDisplay();
+            } else {
+                document.getElementById('profile-info').innerHTML = '<p>Error loading profile—try again!</p>';
+                console.error('[Profile] Error:', data.error || response.statusText);
+            }
+        }
+
+        async function selectProfilePic(picUrl) {
+            if (!loggedInUsername) {
+                alert('Please login to change your profile picture!');
+                return;
+            }
+            const response = await fetch(`http://localhost:${port}/profile/${loggedInUsername}/update-pic`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profilePic: picUrl })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                loggedInProfilePic = picUrl;
+                document.getElementById('profile-icon').src = picUrl;
+                updateProfileDisplay();
+                alert('Profile picture updated successfully!');
+            } else {
+                alert(result.error || 'Failed to update profile picture');
+            }
+        }
+
+        function countTotalComments(comments) {
+            return comments ? comments.length : 0;
+        }
+
+        async function updatePostsDisplay() {
+            const response = await fetch('http://localhost:3001/posts');
+            const postsData = await response.json();
+            console.log('[Posts] Server response:', postsData);
+            if (response.ok && Array.isArray(postsData) && postsData.length > 0) {
+                let html = '';
+                const sortedPosts = postsData.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                sortedPosts.forEach((post) => {
+                    const date = new Date(post.timestamp).toLocaleString();
+                    const profilePic = post.profilePic || loggedInProfilePic || 'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP1.png';
+                    const hasLikedPost = post.likedBy && post.likedBy.includes(walletAddress);
+                    html += `
+                        <div class="post-card" data-post-id="${post._id}">
+                            <img src="${profilePic}" alt="User Profile Picture" style="width: 30px; height: 30px; border-radius: 50%; vertical-align: middle;">
+                            <strong>${post.username || 'Anonymous'}</strong> (${date})
+                            <p>${post.content || 'No content'}</p>`;
+                    if (isAdmin) html += `<button onclick="deletePost('${post._id}')" data-tooltip="Delete Post">Delete</button>`;
+                    html += `
+                            <p>Likes: <span id="likes-${post._id}">${post.likes || 0}</span></p>
+                            <button onclick="likePost('${post._id}')" ${hasLikedPost ? 'disabled' : ''}>${hasLikedPost ? 'Liked' : 'Like'}</button>
+                            <button onclick="toggleCommentInput('${post._id}', 'top')">Comment</button>
+                            <button onclick="toggleComments('${post._id}')">Show/Hide Comments (${(post.comments || []).length})</button>
+                            <div id="comment-input-${post._id}-top" style="display: none;">
+                                <textarea id="comment-content-${post._id}-top" class="comment-input" maxlength="280" placeholder="Add a comment (max 280 chars)"></textarea>
+                                <button onclick="submitComment('${post._id}', null)">Submit</button>
+                            </div>
+                            <div id="comment-section-${post._id}" class="comment-section"></div>
+                        </div>
+                    `;
+                });
+                document.getElementById('post-list').innerHTML = html;
+                sortedPosts.forEach(post => {
+                    const commentSection = document.getElementById(`comment-section-${post._id}`);
+                    if (commentSection && commentSection.classList.contains('visible')) {
+                        renderComments(post.comments || [], post._id);
+                    }
+                });
+            } else {
+                document.getElementById('post-list').innerHTML = '<p>No posts yet—be the first!</p>';
+            }
+        }
+
+        function renderComments(comments, postId, parentId = null, depth = 0) {
+            const commentSection = document.getElementById(`comment-section-${postId}`);
+            if (!commentSection) return;
+            console.log(`[RenderComments] Rendering comments for post ${postId}, parentId: ${parentId}, depth: ${depth}`);
+            let html = '';
+            const filteredComments = (comments || []).filter(comment => 
+                comment && comment.content && (parentId === null ? comment.parentId === null : comment.parentId && comment.parentId.toString() === parentId)
+            ).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            filteredComments.forEach((comment) => {
+                const commentDate = new Date(comment.timestamp).toLocaleString();
+                const profilePic = comment.profilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+                const hasLikedComment = comment.likedBy && comment.likedBy.includes(walletAddress);
+                html += `
+                    <div class="comment" style="margin-left: ${depth * 20}px;">
+                        <img src="${profilePic}" alt="Comment Profile Picture" style="width: 30px; height: 30px; border-radius: 50%; vertical-align: middle;">
+                        <strong>${comment.username || 'Anonymous'}</strong> (${commentDate})
+                        <p>${comment.content}</p>
+                        <p>Likes: <span id="comment-likes-${comment._id}">${comment.likes || 0}</span></p>
+                        <button onclick="likeComment('${postId}', '${comment._id}')" ${hasLikedComment ? 'disabled' : ''}>${hasLikedComment ? 'Liked' : 'Like'}</button>
+                        <button onclick="toggleCommentInput('${postId}', '${comment._id}')">Reply</button>`;
+                if (isAdmin) html += `<button onclick="deleteComment('${postId}', '${comment._id}')">Delete</button>`;
+                html += `
+                        <div id="comment-input-${postId}-${comment._id}" style="display: none;">
+                            <textarea id="comment-content-${postId}-${comment._id}" class="comment-input" maxlength="280" placeholder="Add a reply (max 280 chars)"></textarea>
+                            <button onclick="submitComment('${postId}', '${comment._id}')">Submit</button>
+                        </div>
+                        <div class="replies">${renderComments(comments, postId, comment._id, depth + 1)}</div>
+                    </div>
+                `;
+            });
+            if (parentId === null) {
+                commentSection.innerHTML = html || '<p>No comments yet</p>';
+            }
+            return html;
+        }
+
+        async function submitPost() {
+            if (!loggedInUsername || !walletAddress) {
+                alert('Please login and connect wallet to post!');
+                return;
+            }
+            const content = document.getElementById('postContent').value.trim();
+            if (!content) {
+                alert('Post content cannot be empty');
+                return;
+            }
+            const postButton = document.querySelector('button[onclick="submitPost()"]');
+            postButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wallet: walletAddress, content, username: loggedInUsername, profilePic: loggedInProfilePic })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    document.getElementById('postContent').value = '';
+                    trackPost();
+                    await updatePostsDisplay();
+                    await updateQuestsDisplay();
+                    alert('Post submitted successfully! +10 Quest Points');
+                } else {
+                    alert(result.error || 'Failed to submit post');
+                }
+            } catch (error) {
+                console.error('[SubmitPost] Error:', error);
+                alert('Failed to submit post: ' + error.message);
+            } finally {
+                postButton.disabled = false;
+            }
+        }
+
+        async function submitComment(postId, parentId) {
+            if (!loggedInUsername || !walletAddress) {
+                alert('Please login and connect your Solana wallet to comment!');
+                return;
+            }
+            const pathKey = parentId || 'top';
+            const textarea = document.getElementById(`comment-content-${postId}-${pathKey}`);
+            const content = textarea.value.trim();
+            if (!content) {
+                alert('Comment content cannot be empty');
+                return;
+            }
+            const commentButton = document.querySelector(`#comment-input-${postId}-${pathKey} button`);
+            commentButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/posts/comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        postId,
+                        parentId,
+                        wallet: walletAddress,
+                        content,
+                        username: loggedInUsername,
+                        profilePic: loggedInProfilePic
+                    })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    textarea.value = '';
+                    await updatePostsDisplay();
+                    const commentSection = document.getElementById(`comment-section-${postId}`);
+                    if (commentSection && !commentSection.classList.contains('visible')) {
+                        toggleComments(postId);
+                    }
+                    updateQuestsDisplay();
+                    alert('Comment submitted successfully!');
+                } else {
+                    alert(result.error || 'Failed to submit comment');
+                }
+            } catch (error) {
+                console.error('[SubmitComment] Error:', error);
+                alert('Failed to submit comment: ' + error.message);
+            } finally {
+                commentButton.disabled = false;
+            }
+        }
+
+        async function likePost(postId) {
+            if (!loggedInUsername || !walletAddress) {
+                alert('Please login and connect your Solana wallet to like posts!');
+                return;
+            }
+            const likeButton = event.currentTarget;
+            likeButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/posts/like', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wallet: walletAddress, postId })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    document.getElementById(`likes-${postId}`).textContent = result.likes;
+                    likeButton.textContent = 'Liked';
+                    likeButton.disabled = true;
+                    await updatePostsDisplay();
+                } else {
+                    alert(result.error || 'Failed to like post');
+                    likeButton.disabled = false;
+                }
+            } catch (error) {
+                console.error('[LikePost] Error:', error);
+                alert('Failed to like post: ' + error.message);
+                likeButton.disabled = false;
+            }
+        }
+
+        async function likeComment(postId, commentId) {
+            if (!loggedInUsername || !walletAddress) {
+                alert('Please login and connect your Solana wallet to like comments!');
+                return;
+            }
+            const likeButton = event.currentTarget;
+            likeButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/posts/like-comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ postId, commentId, wallet: walletAddress })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    document.getElementById(`comment-likes-${commentId}`).textContent = result.likes;
+                    likeButton.textContent = 'Liked';
+                    likeButton.disabled = true;
+                    await updatePostsDisplay();
+                    alert('Comment liked successfully!');
+                } else {
+                    alert(result.error || 'Failed to like comment');
+                    likeButton.disabled = false;
+                }
+            } catch (error) {
+                console.error('[LikeComment] Error:', error);
+                alert('Failed to like comment: ' + error.message);
+                likeButton.disabled = false;
+            }
+        }
+
+        async function deleteComment(postId, commentId) {
+            if (!isAdmin) {
+                alert('Admin access required to delete comments!');
+                return;
+            }
+            const deleteButton = event.currentTarget;
+            deleteButton.disabled = true;
+            try {
+                const response = await fetch('http://localhost:3001/posts/delete-comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ postId, commentId })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    await updatePostsDisplay();
+                    alert('Comment deleted successfully!');
+                } else {
+                    alert(result.error || 'Failed to delete comment');
+                }
+            } catch (error) {
+                console.error('[DeleteComment] Error:', error);
+                alert('Failed to delete comment: ' + error.message);
+            } finally {
+                deleteButton.disabled = false;
+            }
+        }
+
+        function toggleCommentInput(postId, pathKey) {
+            const inputSection = document.getElementById(`comment-input-${postId}-${pathKey}`);
+            if (inputSection) {
+                inputSection.style.display = inputSection.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function toggleComments(postId) {
+            const commentSection = document.getElementById(`comment-section-${postId}`);
+            if (!commentSection) return;
+            commentSection.classList.toggle('visible');
+            if (commentSection.classList.contains('visible')) {
+                fetch('http://localhost:3001/posts')
+                    .then(res => res.json())
+                    .then(postsData => {
+                        const post = postsData.find(p => p._id.toString() === postId);
+                        if (post) renderComments(post.comments || [], postId);
+                    });
+            }
+        }
+
+        async function stakeNFT(mintAddress) {
+            if (!loggedInUsername || !walletAddress) {
+                alert('Please login and connect wallet to stake!');
+                return;
+            }
+            const response = await fetch(`http://localhost:3001/stake/${loggedInUsername}/${mintAddress}`, { method: 'POST' });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                await updateProfileDisplay();
+                alert('NFT staked successfully! +50 Staking Points');
+                console.log('[StakeNFT] Refreshing NFT display after stake');
+                await updateNFTDisplay('nft-info');
+                await updateQuestProgressClient('grove-keeper', 'weekly', 1);
+            } else {
+                alert(result.error || 'Failed to stake NFT');
+            }
+        }
+
+        async function mintNFT(button) {
+            console.log('[Mint] === HEX VERSION LOADED ===');
+            console.log('[Mint] === TWO TX MODE ===');
+            console.log('[Mint] Checking Solana Web3 availability...');
+            if (!window.solana || !window.solana.isPhantom) {
+                alert('Phantom wallet not found! Please install Phantom.');
+                return;
+            }
+            console.log('[Mint] Solana Web3 confirmed:', window.solana);
+
+            const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+            button.classList.add('loading');
+
+            try {
+                await window.solana.connect();
+                const publicKey = window.solana.publicKey.toString();
+                console.log('[Mint] Phantom wallet connected:', publicKey);
+                console.log('[Mint] Fetching mint transaction...');
+                const username = loggedInUsername || 'tester';
+                if (!username) throw new Error('Please login to mint!');
+
+                const response = await fetch('http://localhost:3001/api/mint-nft', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ walletAddress: publicKey, username: username })
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+                const data = await response.json();
+                console.log('[Mint] Full Server Response:', data);
+                console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
+                const imageUri = `http://localhost:3001/output/nft_${Date.now()}.png`;
+
+                console.log('[Mint] Signing Tx1 with Phantom...');
+                if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
+                const tx1Buffer = new Uint8Array(data.transaction1.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const transaction1 = solanaWeb3.Transaction.from(tx1Buffer);
+                const signedTx1 = await window.solana.signTransaction(transaction1);
+                const signature1 = await connection.sendRawTransaction(signedTx1.serialize());
+                console.log('[Mint] Transaction 1 Signature:', signature1);
+
+                const tx1Confirmation = await connection.confirmTransaction({
+                    signature: signature1,
+                    blockhash: transaction1.recentBlockhash,
+                    lastValidBlockHeight: (await connection.getBlockHeight()) + 150
+                }, { commitment: 'confirmed', maxRetries: 10 });
+                if (tx1Confirmation.value.err) throw new Error('Tx1 failed: ' + JSON.stringify(tx1Confirmation.value.err));
+                console.log('[Mint] Tx1 Confirmed');
+
+                console.log('[Mint] Signing Tx2 with Phantom...');
+                if (!data.transaction2) throw new Error('Transaction2 missing from server response!');
+                const tx2Buffer = new Uint8Array(data.transaction2.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                const transaction2 = solanaWeb3.Transaction.from(tx2Buffer);
+                const signedTx2 = await window.solana.signTransaction(transaction2);
+                const signature2 = await connection.sendRawTransaction(signedTx2.serialize());
+                console.log('[Mint] Transaction 2 Signature:', signature2);
+
+                const tx2Confirmation = await connection.confirmTransaction({
+                    signature: signature2,
+                    blockhash: transaction2.recentBlockhash,
+                    lastValidBlockHeight: (await connection.getBlockHeight()) + 150
+                }, { commitment: 'confirmed', maxRetries: 10 });
+                if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
+                console.log('[Mint] Tx2 Confirmed');
+
+                mintingPoints = bigInt(mintingPoints || 0).add(25);
+                lemonadePoints = bigInt(lemonadePoints || 0).add(25);
+                updatePointsDisplay();
+
+                await updateNFTDisplay('nft-info');
+                await updateQuestProgressClient('launch-party', 'limited', 1);
+                alert('NFT minted successfully with metadata! Check your Phantom wallet.');
+            } catch (error) {
+                console.error('[Mint] Error:', error);
+                console.log('[Mint] Logs:', error.logs || []);
+                alert('Failed to mint NFT: ' + error.message);
+            } finally {
+                button.classList.remove('loading');
+            }
+        }
+
+        async function unstakeNFT(mintAddress) {
+            if (!loggedInUsername || !walletAddress) {
+                alert('Please login and connect wallet to unstake!');
+                return;
+            }
+            const response = await fetch(`http://localhost:3001/unstake/${loggedInUsername}/${mintAddress}`, { method: 'POST' });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                await updateProfileDisplay();
+                await updateNFTDisplay('nft-info');
+                alert('NFT unstaked successfully!');
+            } else {
+                alert(result.error || 'Failed to unstake NFT');
+            }
+        }
+
+        async function evolveNFT(mintAddress, button) {
+            if (!loggedInUsername || !walletAddress) {
+                alert('Please login and connect wallet to evolve!');
+               return;
+            }
+            if (!lemonadePoints || lemonadePoints.lt(10)) {
+                alert('Need 10 Lemonade Points to evolve!');
+                return;
+            }
+
+            const points = bigInt(lemonadePoints || 0);
+            if (points.lt(10)) {
+                alert('Need 10 Lemonade Points to evolve!');
+                return;
+            }
+            button.classList.add('loading');
+            try {
+                const response = await fetch(`http://localhost:3001/evolve/${loggedInUsername}/${mintAddress}`, {
+                    method: 'GET'
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    lemonadePoints = bigInt(result.lemonadePoints || "0");
+                    stakingPoints = bigInt(result.stakingPoints || "0");
+                    arcadePoints = bigInt(result.arcadePoints || "0");
+                    questPoints = bigInt(result.questPoints || "0");
+                    mintingPoints = bigInt(result.mintingPoints || "0");
+                    bonusPoints = bigInt(result.bonusPoints || "0");
+                    updatePointsDisplay();
+                    alert('NFT evolved successfully!');
+                    await updateNFTDisplay('nft-info');
+                    await updateQuestProgressClient('lemon-evolutionist', 'weekly', 1);
+                    await updateQuestProgressClient('million-lemon-bash', 'limited', 1);
+                } else {
+                    alert(result.error || 'Failed to evolve NFT');
+                }
+            } catch (error) {
+                console.error('[Evolve] Client Error:', error);
+                alert('Failed to evolve NFT: ' + error.message);
+            } finally {
+                button.classList.remove('loading');
+            }
+        }
+
+        async function updateQuestsDisplay() {
+            console.log('[Quests] Updating quest display');
+            if (!loggedInUsername) {
+                document.getElementById('daily-quests').innerHTML = '<h3>Daily Quests</h3><p>Login to see quests!</p>';
+                document.getElementById('weekly-quests').innerHTML = '<h3>Weekly Quests</h3><p>Login to see quests!</p>';
+                document.getElementById('limited-quests').innerHTML = '<h3>Limited-Time Quests</h3><p>Login to see quests!</p>';
+                return;
+            }
+
+            const response = await fetch(`http://localhost:${port}/quests/${loggedInUsername}`);
+            const data = await response.json();
+            console.log('[Quests] Server response:', data);
+
+            if (response.ok && data.success) {
+                const { daily = [], weekly = [], limited = [] } = data.quests || {};
+
+                let dailyHtml = '<h3>Daily Quests</h3>';
+                if (daily.length > 0) {
+                    console.log('[Quests] Rendering daily quests:', daily);
+                    daily.forEach(quest => {
+                        const buttonText = quest.completed && !quest.claimed ? `Claim ${quest.reward} Points` : quest.claimed ? 'Claimed' : 'In Progress';
+                        const buttonDisabled = quest.claimed || !quest.completed ? 'disabled' : '';
+                        dailyHtml += `
+                            <div class="quest-item">
+                                <h4>${quest.title || 'Untitled'}</h4>
+                                <p>${quest.description || 'No description'}</p>
+                                <div class="quest-progress">
+                                    <div class="quest-progress-bar" style="width: ${(quest.progress / quest.goal) * 100}%"></div>
+                                </div>
+                                <p>Progress: ${quest.progress}/${quest.goal}</p>
+                                <button onclick="claimQuestReward('${quest.id}', 'daily')" ${buttonDisabled}>${buttonText}</button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    dailyHtml += '<p>Loading daily quests...</p>';
+                }
+                document.getElementById('daily-quests').innerHTML = dailyHtml;
+
+                let weeklyHtml = '<h3>Weekly Quests</h3>';
+                if (weekly.length > 0) {
+                    console.log('[Quests] Rendering weekly quests:', weekly);
+                    weekly.forEach(quest => {
+                        const buttonText = quest.completed && !quest.claimed ? `Claim ${quest.reward} Points` : quest.claimed ? 'Claimed' : 'In Progress';
+                        const buttonDisabled = quest.claimed || !quest.completed ? 'disabled' : '';
+                        weeklyHtml += `
+                            <div class="quest-item">
+                                <h4>${quest.title || 'Untitled'}</h4>
+                                <p>${quest.description || 'No description'}</p>
+                                <div class="quest-progress">
+                                    <div class="quest-progress-bar" style="width: ${(quest.progress / quest.goal) * 100}%"></div>
+                                </div>
+                                <p>Progress: ${quest.progress}/${quest.goal}</p>
+                                <button onclick="claimQuestReward('${quest.id}', 'weekly')" ${buttonDisabled}>${buttonText}</button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    weeklyHtml += '<p>Loading weekly quests...</p>';
+                }
+                document.getElementById('weekly-quests').innerHTML = weeklyHtml;
+
+                let limitedHtml = '<h3>Limited-Time Quests</h3>';
+                if (limited.length > 0) {
+                    console.log('[Quests] Rendering limited quests:', limited);
+                    limited.forEach(quest => {
+                        const buttonText = quest.completed && !quest.claimed ? `Claim ${quest.reward} Points` : quest.claimed ? 'Claimed' : 'In Progress';
+                        const buttonDisabled = quest.claimed || !quest.completed ? 'disabled' : '';
+                        limitedHtml += `
+                            <div class="quest-item">
+                                <h4>${quest.title || 'Untitled'}</h4>
+                                <p>${quest.description || 'No description'}</p>
+                                <div class="quest-progress">
+                                    <div class="quest-progress-bar" style="width: ${(quest.progress / quest.goal) * 100}%"></div>
+                                </div>
+                                <p>Progress: ${quest.progress}/${quest.goal}</p>
+                                <button onclick="claimQuestReward('${quest.id}', 'limited')" ${buttonDisabled}>${buttonText}</button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    limitedHtml += '<p>Loading limited-time quests...</p>';
+                }
+                document.getElementById('limited-quests').innerHTML = limitedHtml;
+            } else {
+                console.error('[Quests] Fetch failed:', data.error || 'Unknown error');
+                document.getElementById('daily-quests').innerHTML = '<h3>Daily Quests</h3><p>Error loading—try again!</p>';
+                document.getElementById('weekly-quests').innerHTML = '<h3>Weekly Quests</h3><p>Error loading—try again!</p>';
+                document.getElementById('limited-quests').innerHTML = '<h3>Limited-Time Quests</h3><p>Error loading—try again!</p>';
+            }
+        }
+
+        async function claimQuestReward(questId, type) {
+            if (!loggedInUsername) {
+                alert('Login to claim rewards!');
+                return;
+            }
+            const claimButton = document.querySelector(`button[onclick="claimQuestReward('${questId}', '${type}')"]`);
+            claimButton.disabled = true;
+            try {
+                const response = await fetch(`http://localhost:3001/claim-quest/${loggedInUsername}/${type}/${questId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    questPoints = bigInt(questPoints).add(result.reward);
+                    lemonadePoints = bigInt(lemonadePoints).add(result.reward);
+                    updatePointsDisplay();
+                    updateProfileDisplay();
+                    updateQuestsDisplay();
+                    alert(`Claimed ${result.reward} Quest Points!`);
+                } else {
+                    alert(result.error || 'Failed to claim reward');
+                }
+            } catch (error) {
+                console.error('[ClaimQuest] Error:', error);
+                alert('Failed to claim reward: ' + error.message);
+            } finally {
+                claimButton.disabled = false;
+            }
+        }
+
+        async function updateQuestProgressClient(questId, type, increment) {
+            if (!loggedInUsername) {
+                console.log('[Client Quest Update] Not logged in—skipping');
+                return;
+            }
+            try {
+                console.log(`[Client Quest Update] Updating ${questId}, type: ${type}, increment: ${increment}`);
+                const response = await fetch(`http://localhost:3001/quests/${loggedInUsername}/update`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, questId, increment })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    console.log(`[Client Quest Update] Success: ${questId} progress now ${result.progress}`);
+                    await updateQuestsDisplay();
+                } else {
+                    console.error(`[Client Quest Update] Failed: ${result.error}`);
+                }
+            } catch (error) {
+                console.error(`[Client Quest Update] Error: ${error.message}`);
+            }
+        }
+
+        function updatePointsDisplay() {
+            if (typeof lemonadePoints === 'undefined') {
+                console.warn('Points not initialized yet—waiting for BigInteger');
+                document.getElementById('points-display').textContent = 'Lemonade Points: Loading...';
+                return;
+            }
+            document.getElementById('points-display').textContent = `Lemonade Points: ${lemonadePoints.toString()}`;
+        }
+
+        function trackLoginStreak() {
+            const today = new Date().toDateString();
+            if (lastLogin !== today) {
+                loginStreak = lastLogin ? loginStreak + 1 : 1;
+                const pointsEarned = loginStreak >= 5 ? 15 : 5;
+                bonusPoints = bonusPoints.add(pointsEarned);
+                lemonadePoints = lemonadePoints.add(pointsEarned);
+                lastLogin = today;
+                updatePointsDisplay();
+            }
+        }
+
+        async function trackPost() {
+            if (!loggedInUsername) return;
+            await updateQuestProgressClient('citrus-explorer', 'daily', 1);
+            await updateQuestProgressClient('lemon-bard', 'weekly', 1);
+        }
+
+        async function trackSocialVisit() {
+            if (!loggedInUsername) return;
+            try {
+                console.log('[SocialVisit] Tracking social link visit');
+                await updateQuestProgressClient('social-squeeze', 'daily', 1);
+            } catch (error) {
+                console.error(`[SocialVisit] Error: ${error.message}`);
+            }
+        }
+
+        async function trackSectionVisit(sectionId) {
+            if (!loggedInUsername || sectionId === 'home' || sectionId === 'what-is-lcc') return;
+            if (!sectionsVisitedToday.has(sectionId)) {
+                sectionsVisitedToday.add(sectionId);
+                await updateQuestProgressClient('section-adventurer', 'daily', 1);
+            }
+        }
+
+        async function subscribeNewsletter() {
+            const email = document.getElementById('newsletter-email').value.trim();
+            if (!email) {
+                alert('Please enter an email address!');
+                return;
+            }
+            const response = await fetch('http://localhost:3001/subscribe-newsletter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                if (loggedInUsername) {
+                    bonusPoints = bonusPoints.add(25);
+                    lemonadePoints = lemonadePoints.add(25);
+                    updatePointsDisplay();
+                    alert('Subscribed successfully! +25 Bonus Points');
+                } else {
+                    alert('Subscribed successfully!');
+                }
+                document.getElementById('newsletter-email').value = '';
+            } else {
+                alert(result.error || 'Failed to subscribe');
+            }
+        }
+
+        async function updateAdminDisplay() {
+            const adminContent = document.getElementById('admin-content');
+            const adminUpload = document.getElementById('admin-upload');
+            const adminPermissions = document.getElementById('admin-permissions');
+            if (!loggedInUsername) {
+                adminContent.innerHTML = '<p>Please login as an admin to access this section!</p>';
+                adminUpload.style.display = 'none';
+                adminPermissions.style.display = 'none';
+                return;
+            }
+            if (isAdmin) {
+                adminContent.innerHTML = '<p>Welcome, Admin!</p>';
+                adminUpload.style.display = 'block';
+                adminPermissions.style.display = 'block';
+            } else {
+                adminContent.innerHTML = '<p>Admin access only!</p>';
+                adminUpload.style.display = 'none';
+                adminPermissions.style.display = 'none';
+            }
+        }
+
+        async function updateUserPermissions() {
+            if (!loggedInUsername || !isAdmin) {
+                alert('Admin access required!');
+                return;
+            }
+            const username = document.getElementById('admin-username').value.trim();
+            if (!username) {
+                alert('Please enter a username!');
+                return;
+            }
+            const isAdmin = document.getElementById('admin-isAdmin').checked;
+            const permissions = {
+                canPostBlogs: document.getElementById('admin-canPostBlogs').checked,
+                canPostVideos: document.getElementById('admin-canPostVideos').checked,
+                canDeletePosts: document.getElementById('admin-canDeletePosts').checked,
+                canDeleteBlogs: document.getElementById('admin-canDeleteBlogs').checked,
+                canDeleteVideos: document.getElementById('admin-canDeleteVideos').checked
+            };
+            const response = await fetch(`http://localhost:3001/admin/update-user-permissions/${username}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isAdmin, permissions })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                alert(`Permissions updated for ${username}!`);
+                document.getElementById('admin-username').value = '';
+                document.getElementById('admin-isAdmin').checked = false;
+                document.getElementById('admin-canPostBlogs').checked = false;
+                document.getElementById('admin-canPostVideos').checked = false;
+                document.getElementById('admin-canDeletePosts').checked = false;
+                document.getElementById('admin-canDeleteBlogs').checked = false;
+                document.getElementById('admin-canDeleteVideos').checked = false;
+            } else {
+                alert(result.error || 'Failed to update permissions');
+            }
+        }
+
+        function updateRegisterButton() {
+            const tosChecked = document.getElementById('regTos').checked;
+            const riskChecked = document.getElementById('regRisk').checked;
+            document.getElementById('registerBtn').disabled = !(tosChecked && riskChecked);
+        }
+    </script>
+</body>
+</html>
+

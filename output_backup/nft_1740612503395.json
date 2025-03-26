@@ -1,0 +1,44 @@
+{
+  "name": "Lemon Sapling #1740612503395",
+  "symbol": "LSAPL",
+  "description": "A unique Lemon Club NFT at the Lemon Sapling stage with Amethyst rarity!",
+  "image": "http://localhost:3000/output/nft_1740612503395.png",
+  "attributes": [
+    {
+      "trait_type": "Stage",
+      "value": "Sapling"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Amethyst"
+    },
+    {
+      "trait_type": "Background",
+      "value": "BGforestsunset"
+    },
+    {
+      "trait_type": "Base",
+      "value": "purplesapling1"
+    }
+  ],
+  "seller_fee_basis_points": 500,
+  "collection": {
+    "name": "Lemon Club Collective",
+    "family": "LCC"
+  },
+  "properties": {
+    "files": [
+      {
+        "uri": "/output/nft_1740612503395.png",
+        "type": "image/png"
+      }
+    ],
+    "category": "image",
+    "creators": [
+      {
+        "address": "9kkHQYtLU142sFFHB7u7rB2C8MqQyhRKFiM85h81Ctgd",
+        "share": 100
+      }
+    ]
+  }
+}

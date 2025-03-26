@@ -1,0 +1,21 @@
+{
+  "name": "Lemon Seed #263635",
+  "symbol": "LCC",
+  "image": "https://raw.githubusercontent.com/LemonClubCollective/NFT/main/nft_1741904263635.png",
+  "description": "A Lemon Club NFT at the Seed stage",
+  "attributes": [
+    {
+      "trait_type": "Stage",
+      "value": "Seed"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Common"
+    }
+  ],
+  "seller_fee_basis_points": 500,
+  "collection": {
+    "name": "Lemon Club Collective",
+    "family": "LCC"
+  }
+}
