@@ -2335,30 +2335,6 @@ app.post('/admin/reset-all', requireAdmin, async (req, res) => {
     }
 });
 
-// At bottom of server.js
-setInterval(async () => {
-    console.log('[StakingPoll] Checking staked NFTs');
-    for (const username in users) {
-        const user = users[username];
-        if (user.nfts) {
-            user.nfts.forEach(nft => {
-                if (nft.staked && nft.stakeStart) {
-                    const stakeDuration = (Date.now() - nft.stakeStart) / (1000 * 60 * 60); // Hours
-                    const pointsEarned = Math.floor(stakeDuration * 0.5);
-                    const lastPoints = nft.lastPoints || 0;
-                    if (pointsEarned > lastPoints) {
-                        const newPoints = pointsEarned - lastPoints;
-                        awardPoints(username, 'staking', newPoints, `Staking NFT ${nft.mintAddress.slice(0, 8)}...`);
-                        nft.lastPoints = pointsEarned;
-                        console.log(`[StakingPoll] ${username} earned ${newPoints} staking points for ${nft.mintAddress}`);
-                    }
-                }
-            });
-            await db.collection('users').updateOne({ username }, { $set: user });
-        }
-    }
-    await saveData(users, 'users');
-}, 60000); // Check every minute
 
 async function setLeviAsAdmin() {
     try {
