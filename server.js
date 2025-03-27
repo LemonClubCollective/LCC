@@ -293,6 +293,7 @@ async function initialize() {
     if (isInitialized) return;
     isInitialized = true;
 
+ try {
     if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR);
         console.log('[Initialize] Created data directory:', DATA_DIR);
@@ -303,7 +304,7 @@ async function initialize() {
         // Continue without crashing—DATA_DIR might already exist
     }
 
-    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://lemonclub:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
+    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://LemonClubCollective:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
     const client = new MongoClient(mongoUri);
 
 
@@ -359,6 +360,7 @@ async function initialize() {
         process.exit(1);
     }
 
+  try {
     wallet = await loadWallet();
     console.log(`[Init] Wallet loaded: ${wallet.publicKey.toString()}`);
     connection = new Connection(PRIMARY_RPC, 'confirmed');
