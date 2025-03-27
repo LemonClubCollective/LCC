@@ -375,6 +375,32 @@ async function initialize() {
 });
     transporter = sesClient;
 
+ try {
+        connection = new Connection(PRIMARY_RPC, 'confirmed');
+        metaplex = Metaplex.make(connection).use(keypairIdentity(wallet));
+        console.log('[Initialize] Solana and Metaplex initialized successfully');
+    } catch (error) {
+        console.error('[Initialize] Failed to initialize Solana/Metaplex:', error.message);
+        connection = null;
+        metaplex = null;
+    }
+
+    // Initialize SES transporter
+    try {
+        const sesClient = new SESClient({
+            region: 'us-east-1',
+            credentials: {
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+            }
+        });
+        transporter = sesClient;
+        console.log('[Initialize] SES transporter initialized successfully');
+    } catch (error) {
+        console.error('[Initialize] Failed to initialize SES transporter:', error.message);
+        transporter = null;
+    }
+
     let retryCount = 0;
     const maxRetries = 5;
     const retryDelay = 5000;
@@ -404,8 +430,8 @@ async function initialize() {
             console.warn(`[PortCheck] Port ${port} failed after ${maxRetries} retries, trying fallback port ${fallbackPort}...`);
             return startServer(fallbackPort);
         } else if (!isPortFree) {
-            console.error(`[PortCheck] Fallback port ${fallbackPort} is also in use. Exiting.`);
-            process.exit(1);
+             console.error(`[PortCheck] Fallback port ${fallbackPort} is also in use. Proceeding without binding.`);
+                return; // Don't exit—let the app continue
         }
 
         const server = app.listen(portToTry, () => {
@@ -433,9 +459,12 @@ async function initialize() {
                 server.close(() => startServer(fallbackPort));
             } else {
                 console.error('[ServerError] Unexpected error:', err.message);
-                process.exit(1);
             }
         });
+        } catch (error) {
+            console.error('[startServer] Error starting server:', error.message);
+            // Continue without crashing
+        }
     };
 
     await startServer();
