@@ -298,6 +298,11 @@ async function initialize() {
         console.log('[Initialize] Created data directory:', DATA_DIR);
     }
 
+ } catch (error) {
+        console.error('[Initialize] Error creating data directory:', error.message);
+        // Continue without crashing—DATA_DIR might already exist
+    }
+
     const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://lemonclub:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
     const client = new MongoClient(mongoUri);
 
