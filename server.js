@@ -303,7 +303,9 @@ async function initialize() {
         // Continue without crashing—DATA_DIR might already exist
     }
 
-    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://LemonClubCollective:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
+   const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://LemonClubCollective:Think400Big!@cluster0.mongodb.net/lemonclub?retryWrites=true&w=majority&appName=LemonClub';
+    console.log('[Initialize] MongoDB URI:', mongoUri); // Debug log to see the URI
+
     const client = new MongoClient(mongoUri);
 
     try {
