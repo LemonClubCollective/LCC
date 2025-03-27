@@ -306,10 +306,10 @@ async function initialize() {
    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://LemonClubCollective:Think400Big!@cluster0.mongodb.net/lemonclub?retryWrites=true&w=majority&appName=LemonClub';
     console.log('[Initialize] MongoDB URI:', mongoUri); // Debug log to see the URI
 
-    const client = new MongoClient(mongoUri);
-
-    try {
-        await client.connect();
+   let client;
+try {
+    client = new MongoClient(mongoUri); // Moved inside the try block
+    await client.connect();
         console.log('[Initialize] Connected to MongoDB successfully');
         db = client.db('lemonclub');
 
