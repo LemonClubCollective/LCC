@@ -293,13 +293,12 @@ async function initialize() {
     if (isInitialized) return;
     isInitialized = true;
 
- try {
-    if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR);
-        console.log('[Initialize] Created data directory:', DATA_DIR);
-    }
-
- } catch (error) {
+    try {
+        if (!fs.existsSync(DATA_DIR)) {
+            fs.mkdirSync(DATA_DIR);
+            console.log('[Initialize] Created data directory:', DATA_DIR);
+        }
+    } catch (error) {
         console.error('[Initialize] Error creating data directory:', error.message);
         // Continue without crashing—DATA_DIR might already exist
     }
@@ -307,14 +306,13 @@ async function initialize() {
     const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://LemonClubCollective:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
     const client = new MongoClient(mongoUri);
 
-
     try {
         await client.connect();
         console.log('[Initialize] Connected to MongoDB successfully');
         db = client.db('lemonclub');
 
         const oldCollections = [
-             'users',  // Simple collection names, not file paths
+            'users',  // Simple collection names, not file paths
             'posts',
             'tickets',
             'blogs',
@@ -357,25 +355,19 @@ async function initialize() {
         console.log('[Initialize] Loaded videos:', videos.length);
     } catch (error) {
         console.error('[Initialize] MongoDB connection error:', error.message);
-        process.exit(1);
+        db = null;
+        console.error('[Initialize] Proceeding without MongoDB—some features may be unavailable');
     }
 
-  try {
-    wallet = await loadWallet();
-    console.log(`[Init] Wallet loaded: ${wallet.publicKey.toString()}`);
-    connection = new Connection(PRIMARY_RPC, 'confirmed');
-    metaplex = Metaplex.make(connection).use(keypairIdentity(wallet));
-
-    const sesClient = new SESClient({
-    region: 'us-east-1',
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    try {
+        wallet = await loadWallet();
+        console.log(`[Init] Wallet loaded: ${wallet.publicKey.toString()}`);
+    } catch (error) {
+        console.error('[Initialize] Failed to load wallet:', error.message);
+        wallet = null;
     }
-});
-    transporter = sesClient;
 
- try {
+    try {
         connection = new Connection(PRIMARY_RPC, 'confirmed');
         metaplex = Metaplex.make(connection).use(keypairIdentity(wallet));
         console.log('[Initialize] Solana and Metaplex initialized successfully');
@@ -420,47 +412,48 @@ async function initialize() {
     };
 
     const startServer = async (portToTry = port) => {
-        const isPortFree = await checkPort(portToTry);
-        console.log(`[PortCheck] Port ${portToTry} is ${isPortFree ? 'free' : 'in use'}`);
-        if (!isPortFree && portToTry === port && retryCount < maxRetries) {
-            retryCount++;
-            console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
-            return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() => startServer(port));
-        } else if (!isPortFree && portToTry === port) {
-            console.warn(`[PortCheck] Port ${port} failed after ${maxRetries} retries, trying fallback port ${fallbackPort}...`);
-            return startServer(fallbackPort);
-        } else if (!isPortFree) {
-             console.error(`[PortCheck] Fallback port ${fallbackPort} is also in use. Proceeding without binding.`);
-                return; // Don't exit—let the app continue
-        }
-
-        const server = app.listen(portToTry, () => {
-            console.log(`Server running on http://localhost:${portToTry}`);
-            if (blogs.length === 0) {
-                const sampleBlogs = [{ title: "Welcome to Lemon Club!", content: "We're excited to launch our community!", timestamp: Date.now() }];
-                saveData(sampleBlogs, 'blogs');
-                blogs = sampleBlogs;
-            }
-            if (videos.length === 0) {
-                saveData(videos, 'videos');
-            }
-            setLeviAsAdmin();
-        });
-
-        server.on('error', (err) => {
-            if (err.code === 'EADDRINUSE' && portToTry === port && retryCount < maxRetries) {
+        try {
+            const isPortFree = await checkPort(portToTry);
+            console.log(`[PortCheck] Port ${portToTry} is ${isPortFree ? 'free' : 'in use'}`);
+            if (!isPortFree && portToTry === port && retryCount < maxRetries) {
                 retryCount++;
-                console.error(`[ServerError] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
-                server.close(() => {
-                    setTimeout(() => startServer(port), retryDelay);
-                });
-            } else if (err.code === 'EADDRINUSE') {
-                console.error(`[ServerError] Port ${portToTry} is still in use after retries. Switching to fallback port ${fallbackPort}...`);
-                server.close(() => startServer(fallbackPort));
-            } else {
-                console.error('[ServerError] Unexpected error:', err.message);
+                console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
+                return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() => startServer(port));
+            } else if (!isPortFree && portToTry === port) {
+                console.warn(`[PortCheck] Port ${port} failed after ${maxRetries} retries, trying fallback port ${fallbackPort}...`);
+                return startServer(fallbackPort);
+            } else if (!isPortFree) {
+                console.error(`[PortCheck] Fallback port ${fallbackPort} is also in use. Proceeding without binding.`);
+                return; // Don't exit—let the app continue
             }
-        });
+
+            const server = app.listen(portToTry, () => {
+                console.log(`Server running on http://localhost:${portToTry}`);
+                if (blogs.length === 0) {
+                    const sampleBlogs = [{ title: "Welcome to Lemon Club!", content: "We're excited to launch our community!", timestamp: Date.now() }];
+                    saveData(sampleBlogs, 'blogs');
+                    blogs = sampleBlogs;
+                }
+                if (videos.length === 0) {
+                    saveData(videos, 'videos');
+                }
+                setLeviAsAdmin();
+            });
+
+            server.on('error', (err) => {
+                if (err.code === 'EADDRINUSE' && portToTry === port && retryCount < maxRetries) {
+                    retryCount++;
+                    console.error(`[ServerError] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
+                    server.close(() => {
+                        setTimeout(() => startServer(port), retryDelay);
+                    });
+                } else if (err.code === 'EADDRINUSE') {
+                    console.error(`[ServerError] Port ${portToTry} is still in use after retries. Switching to fallback port ${fallbackPort}...`);
+                    server.close(() => startServer(fallbackPort));
+                } else {
+                    console.error('[ServerError] Unexpected error:', err.message);
+                }
+            });
         } catch (error) {
             console.error('[startServer] Error starting server:', error.message);
             // Continue without crashing
