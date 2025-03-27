@@ -308,6 +308,9 @@ async function initialize() {
 
    let client;
 try {
+	if (!mongoUri || !mongoUri.startsWith('mongodb://') && !	mongoUri.startsWith('mongodb+srv://')) {
+            throw new Error('Invalid MongoDB URI format');
+        }
     client = new MongoClient(mongoUri); // Moved inside the try block
     await client.connect();
         console.log('[Initialize] Connected to MongoDB successfully');
@@ -417,6 +420,11 @@ try {
         try {
             const isPortFree = await checkPort(portToTry);
             console.log(`[PortCheck] Port ${portToTry} is ${isPortFree ? 'free' : 'in use'}`);
+	let retryCount = 0;
+            const maxRetries = 5;
+            const retryDelay = 5000;
+            const fallbackPort = 5000;
+
             if (!isPortFree && portToTry === port && retryCount < maxRetries) {
                 retryCount++;
                 console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
