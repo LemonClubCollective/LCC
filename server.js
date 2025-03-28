@@ -349,6 +349,7 @@ async function initialize() {
         wallet = null;
     }
 
+	console.log('[Initialize] Attempting Solana/Metaplex init');
     try {
         connection = new Connection(PRIMARY_RPC, 'confirmed');
         metaplex = wallet ? Metaplex.make(connection).use(keypairIdentity(wallet)) : null;
@@ -359,12 +360,13 @@ async function initialize() {
         metaplex = null;
     }
 
+ console.log('[Initialize] Attempting SES init');
     try {
         const sesClient = new SESClient({
             region: 'us-east-1',
             credentials: {
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'dummy',
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'dummy'
             }
         });
         transporter = sesClient;
@@ -374,6 +376,7 @@ async function initialize() {
         transporter = null;
     }
 
+ console.log('[Initialize] Starting server');
     const startServer = async (portToTry = port) => {
         try {
             const net = require('net');
