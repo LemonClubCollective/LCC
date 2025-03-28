@@ -303,7 +303,7 @@ async function initialize() {
         // Continue without crashing—DATA_DIR might already exist
     }
 
-   const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://LemonClubCollective:Think400Big!@cluster0.mongodb.net/lemonclub?retryWrites=true&w=majority&appName=LemonClub';
+   const mongoUri = 'mongodb+srv://LemonClubCollective:Think400Big!@cluster0.mongodb.net/lemonclub?retryWrites=true&w=majority&appName=LemonClub'; // No process.env
     console.log('[Initialize] MongoDB URI:', mongoUri); // Debug log to see the URI
 
    let client;
