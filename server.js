@@ -6,10 +6,10 @@ const { TOKEN_METADATA_PROGRAM_ID: IMPORTED_TOKEN_METADATA_PROGRAM_ID } = requir
 const fsPromises = require('fs').promises;
 const fs = require('fs');
 const path = require('path');
-const stripe = require('stripe'(sk_test51Qxc9v03zQcNJCYZCY8NEg0wC8LHnCd1c8OiWeqsOPyHKzBponH5gObOzGOdRgMnbcx3nCEQuzatt53kIrC9ScoA0022Lt1WDy);
+const stripe = require('stripe')('sk_test51Qxc9v03zQcNJCYZCY8NEg0wC8LHnCd1c8OiWeqsOPyHKzBponH5gObOzGOdRgMnbcx3nCEQuzatt53kIrC9ScoA0022Lt1WDy');
 const CoinbaseCommerce = require('coinbase-commerce-node');
 const Client = CoinbaseCommerce.Client;
-Client.init(989417de-057c-4d9f-9a80-30b2f29b8198);
+Client.init('989417de-057c-4d9f-9a80-30b2f29b8198');
 const Charge = CoinbaseCommerce.resources.Charge;
 const multer = require('multer');
 const axios = require('axios');
@@ -27,6 +27,7 @@ const s3Client = new S3Client({
         secretAccessKey: '+hM8RcbuPd1M+7j501adoUWCfqGEwzpbkHTkdaqA'
     }
 });
+
 // Constants
 const port = process.env.PORT || 8080;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
