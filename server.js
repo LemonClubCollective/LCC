@@ -205,6 +205,10 @@ const profilePics = [
 ];
 
 const saveData = async (data, collectionName) => {
+if (!db) {
+        console.log(`[SaveData] No MongoDB connection, skipping save to ${collectionName}`);
+        return;
+    }
     try {
         const collectionMap = {
             'users.json': 'users',
