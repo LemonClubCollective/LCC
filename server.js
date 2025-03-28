@@ -293,57 +293,30 @@ async function initialize() {
     if (isInitialized) return;
     isInitialized = true;
 
+    console.log('[Initialize] Starting initialization');
+
     try {
         if (!fs.existsSync(DATA_DIR)) {
-            fs.mkdirSync(DATA_DIR);
+            fs.mkdirSync(DATA_DIR, { recursive: true });
             console.log('[Initialize] Created data directory:', DATA_DIR);
         }
     } catch (error) {
         console.error('[Initialize] Error creating data directory:', error.message);
-        // Continue without crashing—DATA_DIR might already exist
     }
 
-   const mongoUri = 'mongodb+srv://LemonClubCollective:Think400Big!@cluster0.mongodb.net/lemonclub?retryWrites=true&w=majority&appName=LemonClub'; // No process.env
-    console.log('[Initialize] MongoDB URI:', mongoUri); // Debug log to see the URI
+    const mongoUri = 'mongodb+srv://LemonClubCollective:Think400Big!@cluster0.mongodb.net/lemonclub?retryWrites=true&w=majority&appName=LemonClub';
+    console.log('[Initialize] MongoDB URI:', mongoUri);
 
-   let client;
-try {
-	if (!mongoUri || !mongoUri.startsWith('mongodb://') && !	mongoUri.startsWith('mongodb+srv://')) {
+    let client;
+    try {
+        if (!mongoUri || (!mongoUri.startsWith('mongodb://') && !mongoUri.startsWith('mongodb+srv://'))) {
             throw new Error('Invalid MongoDB URI format');
         }
-    client = new MongoClient(mongoUri); // Moved inside the try block
-    await client.connect();
+        client = new MongoClient(mongoUri, { connectTimeoutMS: 10000, serverSelectionTimeoutMS: 10000 });
+        await client.connect();
         console.log('[Initialize] Connected to MongoDB successfully');
         db = client.db('lemonclub');
-
-        const oldCollections = [
-            'users',  // Simple collection names, not file paths
-            'posts',
-            'tickets',
-            'blogs',
-            'videos'
-        ];
-        const newCollectionNames = ['users', 'posts', 'tickets', 'blogs', 'videos'];
-        for (let i = 0; i < oldCollections.length; i++) {
-            const oldName = oldCollections[i];
-            const newName = newCollectionNames[i];
-            const oldCollectionExists = await db.listCollections({ name: oldName }).hasNext();
-            if (oldCollectionExists) {
-                console.log(`[Migration] Migrating ${oldName} to ${newName}`);
-                const data = await db.collection(oldName).find().toArray();
-                if (data.length > 0) {
-                    for (const doc of data) {
-                        const existing = await db.collection(newName).findOne({ _id: doc._id });
-                        if (!existing) {
-                            await db.collection(newName).insertOne(doc);
-                        }
-                    }
-                }
-                await db.collection(oldName).drop();
-                console.log(`[Migration] Successfully migrated ${oldName} to ${newName}`);
-            }
-        }
-
+        // Migration and data load...
         users = (await db.collection('users').find().toArray()).reduce((acc, user) => {
             if (user && user.username) acc[user.username.toLowerCase()] = user;
             return acc;
@@ -352,16 +325,16 @@ try {
         tickets = await db.collection('tickets').find().toArray() || [];
         blogs = await db.collection('blogs').find().toArray() || [];
         videos = await db.collection('videos').find().toArray() || [];
-
-        console.log('[Initialize] Loaded users:', Object.keys(users));
-        console.log('[Initialize] Loaded posts:', posts.length);
-        console.log('[Initialize] Loaded tickets:', tickets.length);
-        console.log('[Initialize] Loaded blogs:', blogs.length);
-        console.log('[Initialize] Loaded videos:', videos.length);
+        console.log('[Initialize] Data loaded successfully');
     } catch (error) {
         console.error('[Initialize] MongoDB connection error:', error.message);
         db = null;
-        console.error('[Initialize] Proceeding without MongoDB—some features may be unavailable');
+        users = {};
+        posts = [];
+        tickets = [];
+        blogs = [];
+        videos = [];
+        console.error('[Initialize] Proceeding without MongoDB');
     }
 
     try {
@@ -374,7 +347,7 @@ try {
 
     try {
         connection = new Connection(PRIMARY_RPC, 'confirmed');
-        metaplex = Metaplex.make(connection).use(keypairIdentity(wallet));
+        metaplex = wallet ? Metaplex.make(connection).use(keypairIdentity(wallet)) : null;
         console.log('[Initialize] Solana and Metaplex initialized successfully');
     } catch (error) {
         console.error('[Initialize] Failed to initialize Solana/Metaplex:', error.message);
@@ -382,13 +355,12 @@ try {
         metaplex = null;
     }
 
-    // Initialize SES transporter
     try {
         const sesClient = new SESClient({
             region: 'us-east-1',
             credentials: {
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+                accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
             }
         });
         transporter = sesClient;
@@ -398,29 +370,19 @@ try {
         transporter = null;
     }
 
-    let retryCount = 0;
-    const maxRetries = 5;
-    const retryDelay = 5000;
-    const fallbackPort = 5000;
-
-    const checkPort = (port) => {
-        return new Promise((resolve) => {
-            const net = require('net');
-            const tester = net.createServer()
-                .once('error', (err) => (err.code === 'EADDRINUSE' ? resolve(false) : resolve(true)))
-                .once('listening', () => {
-                    tester.close();
-                    resolve(true);
-                })
-                .listen(port);
-        });
-    };
-
     const startServer = async (portToTry = port) => {
         try {
+            const net = require('net');
+            const checkPort = (port) => new Promise((resolve) => {
+                const tester = net.createServer()
+                    .once('error', (err) => resolve(err.code === 'EADDRINUSE' ? false : true))
+                    .once('listening', () => { tester.close(); resolve(true); })
+                    .listen(port);
+            });
+
             const isPortFree = await checkPort(portToTry);
             console.log(`[PortCheck] Port ${portToTry} is ${isPortFree ? 'free' : 'in use'}`);
-	let retryCount = 0;
+            let retryCount = 0;
             const maxRetries = 5;
             const retryDelay = 5000;
             const fallbackPort = 5000;
@@ -434,7 +396,7 @@ try {
                 return startServer(fallbackPort);
             } else if (!isPortFree) {
                 console.error(`[PortCheck] Fallback port ${fallbackPort} is also in use. Proceeding without binding.`);
-                return; // Don't exit—let the app continue
+                return;
             }
 
             const server = app.listen(portToTry, () => {
@@ -451,26 +413,16 @@ try {
             });
 
             server.on('error', (err) => {
-                if (err.code === 'EADDRINUSE' && portToTry === port && retryCount < maxRetries) {
-                    retryCount++;
-                    console.error(`[ServerError] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
-                    server.close(() => {
-                        setTimeout(() => startServer(port), retryDelay);
-                    });
-                } else if (err.code === 'EADDRINUSE') {
-                    console.error(`[ServerError] Port ${portToTry} is still in use after retries. Switching to fallback port ${fallbackPort}...`);
-                    server.close(() => startServer(fallbackPort));
-                } else {
-                    console.error('[ServerError] Unexpected error:', err.message);
-                }
+                console.error('[ServerError] Server error:', err.message);
             });
         } catch (error) {
             console.error('[startServer] Error starting server:', error.message);
-            // Continue without crashing
         }
     };
 
+    console.log('[Initialize] Starting server');
     await startServer();
+    console.log('[Initialize] Initialization complete');
 }
 
 // Helper to standardize timestamps
