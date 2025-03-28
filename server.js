@@ -304,7 +304,7 @@ async function initialize() {
         console.error('[Initialize] Error creating data directory:', error.message);
     }
 
-    const mongoUri = 'mongodb+srv://LemonClubCollective:Think400Big!@cluster0.mongodb.net/lemonclub?retryWrites=true&w=majority&appName=LemonClub';
+    const mongoUri = 'mongodb+srv://lemonclub:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
     console.log('[Initialize] MongoDB URI:', mongoUri);
 
     let client;
