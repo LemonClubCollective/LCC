@@ -6,10 +6,10 @@ const { TOKEN_METADATA_PROGRAM_ID: IMPORTED_TOKEN_METADATA_PROGRAM_ID } = requir
 const fsPromises = require('fs').promises;
 const fs = require('fs');
 const path = require('path');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe'(sk_test51Qxc9v03zQcNJCYZCY8NEg0wC8LHnCd1c8OiWeqsOPyHKzBponH5gObOzGOdRgMnbcx3nCEQuzatt53kIrC9ScoA0022Lt1WDy);
 const CoinbaseCommerce = require('coinbase-commerce-node');
 const Client = CoinbaseCommerce.Client;
-Client.init(process.env.COINBASE_API_KEY);
+Client.init(989417de-057c-4d9f-9a80-30b2f29b8198);
 const Charge = CoinbaseCommerce.resources.Charge;
 const multer = require('multer');
 const axios = require('axios');
@@ -23,11 +23,10 @@ const { S3Client, HeadObjectCommand, PutObjectCommand } = require('@aws-sdk/clie
 const s3Client = new S3Client({
     region: 'us-east-1',
     credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        accessKeyId: 'AKIAW5WU5LN7HKW7BNXV',
+        secretAccessKey: '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'
     }
 });
-
 // Constants
 const port = process.env.PORT || 8080;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
@@ -365,9 +364,9 @@ async function initialize() {
         const sesClient = new SESClient({
             region: 'us-east-1',
             credentials: {
-                accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'dummy',
-                secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'dummy'
-            }
+                accessKeyId: 'AKIAW5WU5LN7HKW7BNXV',
+            secretAccessKey: '+hM8RcbuPd1M+7j501adoUWCfqGEwzpbkHTkdaqA'
+        }
         });
         transporter = sesClient;
         console.log('[Initialize] SES transporter initialized successfully');
@@ -498,8 +497,8 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const lambdaClient = new LambdaClient({
     region: 'us-east-1',
     credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        accessKeyId: 'AKIAW5WU5LN7HKW7BNXV',
+        secretAccessKey: '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'
     }
 });
 
