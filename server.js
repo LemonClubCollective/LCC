@@ -621,7 +621,7 @@ initialize().then(() => {
 
 let loggedInUsername = null;
 
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
     if (!req.session || !req.session.username) {
         console.log('[RequireAdmin] No session or username found');
         return res.status(401).json({ error: 'Please log in' });
