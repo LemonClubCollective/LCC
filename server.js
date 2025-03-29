@@ -370,7 +370,8 @@ async function initialize() {
             credentials: {
                 accessKeyId: 'AKIAW5WU5LN7HKW7BNXV',
             secretAccessKey: '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'
-        }
+         },
+            requestTimeout: 5000
         });
         transporter = sesClient;
         console.log('[Initialize] SES transporter initialized successfully');
