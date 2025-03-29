@@ -920,6 +920,11 @@ app.post('/api/mint-nft', async (req, res) => {
         const { walletAddress, username } = req.body;
         if (!walletAddress || !username) return res.status(400).json({ error: 'Missing required fields' });
 
+	if (!metaplex || !wallet) {
+            console.error('[MintNFT] Solana/Metaplex not initialized');
+            return res.status(500).json({ error: 'Solana/Metaplex not initialized' });
+        }
+
         const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
         const userPubkey = new PublicKey(walletAddress);
         const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
