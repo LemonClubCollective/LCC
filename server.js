@@ -205,7 +205,7 @@ const profilePics = [
 ];
 
 const saveData = async (data, collectionName) => {
-if (!db) {
+    if (!db) {
         console.log(`[SaveData] No MongoDB connection, skipping save to ${collectionName}`);
         return;
     }
@@ -237,10 +237,8 @@ if (!db) {
         console.log(`[SaveData] Saved to ${mappedName}`);
     } catch (error) {
         console.error(`[SaveData] Error saving to ${collectionName}: ${error.message}`);
-        throw error; // Re-throw to catch upstream
     }
 };
-
 const quests = {
     daily: [
         { id: 'arcade-play', title: 'Arcade Play', description: 'Play arcade games for 5 mins', goal: 5, reward: 20 },
@@ -392,9 +390,10 @@ async function initialize() {
             let retryCount = 0;
             const maxRetries = 5;
             const retryDelay = 5000;
-            const fallbackPort = 5000;
+            const fallbackPort = 8080;
 
-            if (!isPortFree && portToTry === port && retryCount < maxRetries) {
+            
+        if (!isPortFree && portToTry === (process.env.PORT || 80) && retryCount < maxRetries) {
                 retryCount++;
                 console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
                 return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() => startServer(port));
@@ -623,18 +622,18 @@ function requireAdmin(req, res, next) {
         return res.status(401).json({ error: 'Please log in' });
     }
     loggedInUsername = req.session.username;
-    db.collection('users').findOne({ username: loggedInUsername }, (err, user) => {
-        if (err) {
-            console.error('[RequireAdmin] DB Error:', err);
-            return res.status(500).json({ error: 'Server error' });
-        }
+    try {
+        const user = await db.collection('users').findOne({ username: loggedInUsername });
         if (!user || !user.isAdmin) {
             console.log(`[RequireAdmin] User ${loggedInUsername} not found or not admin:`, user);
             return res.status(403).json({ error: 'Admin access required' });
         }
         console.log(`[RequireAdmin] Admin ${loggedInUsername} authenticated`);
         next();
-    });
+    } catch (err) {
+        console.error('[RequireAdmin] DB Error:', err);
+        return res.status(500).json({ error: 'Server error' });
+    }
 }
 
 function requirePermission(permission) {
@@ -656,7 +655,7 @@ app.use(session({
     secret: 'your-secret-key', // Replace with a strong, unique secret in production
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours, secure: false for local dev
+    cookie: { secure: true, maxAge: 24 * 60 * 60 * 1000 } // 24 hours, secure: false for local dev
 }));
 
 // Debug logging middleware
