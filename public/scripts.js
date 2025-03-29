@@ -44,6 +44,10 @@ function stopAllGameTimers() {
             document.getElementById('registerBtn').disabled = !(tosChecked && riskChecked);
         }
 
+function updateAuthButton() {
+            document.getElementById('auth-btn').textContent = loggedInUsername ? 'Logout' : 'Login';
+        }
+
 
 async function showContent(sectionId) {
     console.log(`showContent called with: ${sectionId}`);

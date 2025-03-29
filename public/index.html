@@ -1571,10 +1571,7 @@
             document.getElementById('wallet-status').textContent = 'Wallet not connected';
         }
 
-        function updateAuthButton() {
-            document.getElementById('auth-btn').textContent = loggedInUsername ? 'Logout' : 'Login';
-        }
-
+        
         function updateProfileIcon() {
             const profileIcon = document.getElementById('profile-icon');
             if (profileIcon) {
@@ -2146,7 +2143,7 @@
                 return;
             }
             const response = await fetch(`/profile/${loggedInUsername}/update-pic`, {
-    method: 'POST'
+    method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ profilePic: picUrl })
             });
@@ -2838,43 +2835,45 @@
             }
         }
 
-        async function updateUserPermissions() {
-            if (!loggedInUsername || !isAdmin) {
-                alert('Admin access required!');
-                return;
-            }
-            const username = document.getElementById('admin-username').value.trim();
-            if (!username) {
-                alert('Please enter a username!');
-                return;
-            }
-            const isAdmin = document.getElementById('admin-isAdmin').checked;
-            const permissions = {
-                canPostBlogs: document.getElementById('admin-canPostBlogs').checked,
-                canPostVideos: document.getElementById('admin-canPostVideos').checked,
-                canDeletePosts: document.getElementById('admin-canDeletePosts').checked,
-                canDeleteBlogs: document.getElementById('admin-canDeleteBlogs').checked,
-                canDeleteVideos: document.getElementById('admin-canDeleteVideos').checked
-            };
-            const response = await fetch(`/admin/update-user-permissions/${username}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isAdmin, permissions })
-            });
-            const result = await response.json();
-            if (response.ok && result.success) {
-                alert(`Permissions updated for ${username}!`);
-                document.getElementById('admin-username').value = '';
-                document.getElementById('admin-isAdmin').checked = false;
-                document.getElementById('admin-canPostBlogs').checked = false;
-                document.getElementById('admin-canPostVideos').checked = false;
-                document.getElementById('admin-canDeletePosts').checked = false;
-                document.getElementById('admin-canDeleteBlogs').checked = false;
-                document.getElementById('admin-canDeleteVideos').checked = false;
-            } else {
-                alert(result.error || 'Failed to update permissions');
-            }
-        }
+async function updateUserPermissions() {
+    if (!loggedInUsername || !isAdmin) {
+        alert('Admin access required!');
+        return;
+    }
+    const username = document.getElementById('admin-username').value.trim();
+    if (!username) {
+        alert('Please enter a username!');
+        return;
+    }
+    const isAdmin = document.getElementById('admin-isAdmin').checked;
+    const permissions = {
+        canPostBlogs: document.getElementById('admin-canPostBlogs').checked,
+        canPostVideos: document.getElementById('admin-canPostVideos').checked,
+        canDeletePosts: document.getElementById('admin-canDeletePosts').checked,
+        canDeleteBlogs: document.getElementById('admin-canDeleteBlogs').checked,
+        canDeleteVideos: document.getElementById('admin-canDeleteVideos').checked
+    };
+
+    const response = await fetch(`/admin/update-user-permissions/${username}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ isAdmin, permissions })
+    });
+
+    const result = await response.json();
+    if (response.ok && result.success) {
+        alert(`Permissions updated for ${username}`);
+        document.getElementById('admin-username').value = "";
+        document.getElementById('admin-isAdmin').checked = false;
+        document.getElementById('admin-canPostBlogs').checked = false;
+        document.getElementById('admin-canPostVideos').checked = false;
+        document.getElementById('admin-canDeletePosts').checked = false;
+        document.getElementById('admin-canDeleteBlogs').checked = false;
+        document.getElementById('admin-canDeleteVideos').checked = false;
+    } else {
+        alert(result.error || 'Failed to update permissions');
+    }
+}
 
     </script>
 </body>
