@@ -38,6 +38,13 @@ function stopAllGameTimers() {
     console.log('All game timers stopped');
 }
 
+ function updateRegisterButton() {
+            const tosChecked = document.getElementById('regTos').checked;
+            const riskChecked = document.getElementById('regRisk').checked;
+            document.getElementById('registerBtn').disabled = !(tosChecked && riskChecked);
+        }
+
+
 async function showContent(sectionId) {
     console.log(`showContent called with: ${sectionId}`);
     if ((sectionId === 'profile' || sectionId === 'videos' || sectionId === 'staking' || sectionId === 'admin') && !loggedInUsername) {
