@@ -1532,7 +1532,7 @@
             const regRisk = document.getElementById('regRisk');
             if (regTos) regTos.addEventListener('change', updateRegisterButton);
             if (regRisk) regRisk.addEventListener('change', updateRegisterButton);
-        });
+        
 
         async function toggleWalletConnection() {
             console.log('toggleWalletConnection called');
@@ -2876,11 +2876,6 @@
             }
         }
 
-        function updateRegisterButton() {
-            const tosChecked = document.getElementById('regTos').checked;
-            const riskChecked = document.getElementById('regRisk').checked;
-            document.getElementById('registerBtn').disabled = !(tosChecked && riskChecked);
-        }
     </script>
 </body>
 </html>
