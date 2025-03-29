@@ -323,9 +323,13 @@ async function initialize() {
             if (user && user.username) acc[user.username.toLowerCase()] = user;
             return acc;
         }, {});
+        console.log('[Initialize] Loading posts...');
         posts = await db.collection('posts').find().toArray() || [];
+        console.log('[Initialize] Loading tickets...');
         tickets = await db.collection('tickets').find().toArray() || [];
+        console.log('[Initialize] Loading blogs...');
         blogs = await db.collection('blogs').find().toArray() || [];
+        console.log('[Initialize] Loading videos...');
         videos = await db.collection('videos').find().toArray() || [];
         console.log('[Initialize] Data loaded successfully');
     } catch (error) {
@@ -339,6 +343,7 @@ async function initialize() {
         console.error('[Initialize] Proceeding without MongoDB');
     }
 
+    console.log('[Initialize] Attempting wallet load...');
     try {
         wallet = await loadWallet();
         console.log(`[Init] Wallet loaded: ${wallet.publicKey.toString()}`);
