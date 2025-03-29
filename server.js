@@ -2288,30 +2288,6 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
     }
 });
 
-app.post('/admin/reset-all', requireAdmin, async (req, res) => {
-    try {
-        await db.collection('users').deleteMany({});
-        await db.collection('posts').deleteMany({});
-        await db.collection('tickets').deleteMany({});
-        await db.collection('blogs').deleteMany({});
-        await db.collection('videos').deleteMany({});
-        users = await db.collection('users').findOne({}) || {};
-        posts = await db.collection('posts').find().toArray() || [];
-        tickets = await db.collection('tickets').find().toArray() || [];
-        blogs = await db.collection('blogs').find().toArray() || [];
-        videos = await db.collection('videos').find().toArray() || [];
-        await saveData(users, 'users');
-        await saveData(posts, 'posts');
-        await saveData(tickets, 'tickets');
-        await saveData(blogs, 'blogs');
-        await saveData(videos, 'videos');
-        res.json({ success: true });
-    } catch (error) {
-        console.error('[ResetAll] Error:', error.message);
-        res.status(500).json({ error: 'Failed to reset all data' });
-    }
-});
-
 
 async function setLeviAsAdmin() {
     try {
