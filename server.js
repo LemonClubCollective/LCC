@@ -652,7 +652,7 @@ function requirePermission(permission) {
 // Ensure session is initialized
 const session = require('express-session');
 app.use(session({
-    secret: 'your-secret-key', // Replace with a strong, unique secret in production
+    secret: 'bc9bdf51beca4d820288cf27171c9f33b7ace452aca29f71efecb812bb5e023b', // Replace with a strong, unique secret in production
     resave: false,
     saveUninitialized: false,
     cookie: { secure: true, maxAge: 24 * 60 * 60 * 1000 } // 24 hours, secure: false for local dev
@@ -740,10 +740,10 @@ app.post('/register', async (req, res) => {
             Message: {
                 Subject: { Data: 'Verify Your Lemon Club Collective Account' },
                 Body: {
-                    Html: { 
-                        Data: `<p>Welcome to Lemon Club Collective! Click <a href="http://localhost:${port}/verify-email/${username}/${verificationToken}">this link</a> to verify your email.</p>` 
+                     Html: { 
+                        Data: `<p>Welcome to Lemon Club Collective! Click <a href="http://lemonclub-env2.us-east-1.elasticbeanstalk.com/verify-email/${username}/${verificationToken}">this link</a> to verify your email.</p>` 
                     },
-                    Text: { Data: `Welcome to Lemon Club Collective! Verify your email by copying this link into your browser: http://localhost:${port}/verify-email/${username}/${verificationToken}` }
+                    Text: { Data: `Welcome to Lemon Club Collective! Verify your email by copying this link into your browser: http://lemonclub-env2.us-east-1.elasticbeanstalk.com/verify-email/${username}/${verificationToken}` }
                 }
             }
         });
@@ -1871,7 +1871,7 @@ app.post('/submit-ticket', async (req, res) => {
         await saveData(tickets, 'tickets');
         const mailOptions = {
             from: 'lemonclub@usa.com',
-            to: 'meredith.ritchie3@ethereal.email',
+            to: 'lemonclub@usa.com',
             subject: 'New Support Ticket',
             text: `New ticket from ${name} (${email}):\n\n${message}`
         };
