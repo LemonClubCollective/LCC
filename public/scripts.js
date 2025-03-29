@@ -9,6 +9,35 @@ let questPoints = bigInt(0);
 let mintingPoints = bigInt(0);
 let bonusPoints = bigInt(0);
 
+function initBigIntegerVars() {
+            if (typeof BigInteger === 'undefined') {
+                console.error('BigInteger not available—check local install');
+                return;
+            }
+            lemonadePoints = BigInteger(0);
+            stakingPoints = BigInteger(0);
+            arcadePoints = BigInteger(0);
+            questPoints = BigInteger(0);
+            mintingPoints = BigInteger(0);
+            bonusPoints = BigInteger(0);
+            console.log('BigInteger variables initialized');
+        }
+
+        if (typeof BigInteger !== 'undefined') {
+            initBigIntegerVars();
+        } else {
+            console.error('BigInteger not loaded yet—waiting...');
+        }
+
+function stopAllGameTimers() {
+    // Access gameTimers from the global scope (defined in index.html)
+    for (const timerId in window.gameTimers) {
+        clearInterval(window.gameTimers[timerId]);
+        delete window.gameTimers[timerId];
+    }
+    console.log('All game timers stopped');
+}
+
 async function showContent(sectionId) {
     console.log(`showContent called with: ${sectionId}`);
     if ((sectionId === 'profile' || sectionId === 'videos' || sectionId === 'staking' || sectionId === 'admin') && !loggedInUsername) {
@@ -120,7 +149,32 @@ function logout() {
     alert('Logged out successfully!');
 }
 
-// Ensure showContent is called on page load for a default section
-window.onload = function() {
-    showContent('what-is-lcc');
-};
+async function register() {
+    console.log('[Register] Register button clicked');
+    const email = document.getElementById('registerEmail').value.trim();
+    const username = document.getElementById('registerUsername').value.trim();
+    const password = document.getElementById('registerPassword').value.trim();
+    const emailConsent = document.getElementById('emailConsent').checked;
+    console.log('[Register] Email:', email, 'Username:', username, 'Password:', password, 'Email Consent:', emailConsent);
+    if (!email || !username || !password) {
+        alert('Please enter email, username, and password!');
+        return;
+    }
+    try {
+        const response = await fetch(`/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, username, password, emailConsent })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            alert('Registration successful! Please check your email to verify your account.');
+            showContent('home');
+        } else {
+            alert(result.error || 'Registration failed');
+        }
+    } catch (error) {
+        console.error('[Register] Error:', error);
+        alert('Registration failed: ' + error.message);
+    }
+}

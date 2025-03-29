@@ -1454,7 +1454,6 @@
         const gameTimers = {};
         let startTime = null;
         let profilePicHistory = [];
-        let isAdmin = false;
         let walletAddress = null;
         let lastScrollTop = 0;
         const gamePlaytimes = { 'big-dill': 0, 'owl-capone': 0, 'lenny-lemon': 0 };
@@ -1477,26 +1476,7 @@
             'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP10.png'
         ];
 
-            function initBigIntegerVars() {
-            if (typeof BigInteger === 'undefined') {
-                console.error('BigInteger not available—check local install');
-                return;
-            }
-            lemonadePoints = BigInteger(0);
-            stakingPoints = BigInteger(0);
-            arcadePoints = BigInteger(0);
-            questPoints = BigInteger(0);
-            mintingPoints = BigInteger(0);
-            bonusPoints = BigInteger(0);
-            console.log('BigInteger variables initialized');
-        }
-
-        if (typeof BigInteger !== 'undefined') {
-            initBigIntegerVars();
-        } else {
-            console.error('BigInteger not loaded yet—waiting...');
-        }
-
+            
         function toggleWalletConnection() {
             const connectBtn = document.getElementById('connect-wallet-btn');
             const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
@@ -1553,38 +1533,6 @@
             if (regTos) regTos.addEventListener('change', updateRegisterButton);
             if (regRisk) regRisk.addEventListener('change', updateRegisterButton);
         });
-
-      
-        async function register() {
-            const email = document.getElementById('regEmail').value.trim();
-            const username = document.getElementById('regUsername').value.trim();
-            const password = document.getElementById('regPassword').value.trim();
-            const tosChecked = document.getElementById('regTos').checked;
-            const riskChecked = document.getElementById('regRisk').checked;
-            const emailConsent = document.getElementById('regEmailConsent').checked;
-            if (!email || !username || !password || !tosChecked || !riskChecked) {
-                alert("Please fill all fields and agree to the terms!");
-                return;
-            }
-            const response = await fetch('/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, username, password, emailConsent })
-            });
-            const result = await response.json();
-            if (response.ok && result.success) {
-                alert('Registration successful! Check your email to verify your account.');
-                document.getElementById('regEmail').value = '';
-                document.getElementById('regUsername').value = '';
-                document.getElementById('regPassword').value = '';
-                document.getElementById('regTos').checked = false;
-                document.getElementById('regRisk').checked = false;
-                document.getElementById('regEmailConsent').checked = false;
-                document.getElementById('registerBtn').disabled = true;
-            } else {
-                alert(result.error || 'Failed to register');
-            }
-        }
 
         async function toggleWalletConnection() {
             console.log('toggleWalletConnection called');
@@ -1803,10 +1751,6 @@
             }
         }
 
-        async function stopAllGameTimers() {
-            Object.keys(gameTimers).forEach(async gameId => await stopGame(gameId));
-        }
-
         async function claimVictory(gameId) {
             if (!loggedInUsername) {
                 alert('Please login to claim victory!');
@@ -1814,7 +1758,7 @@
             }
             const response = await fetch(`/claim-victory/${loggedInUsername}/${gameId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
             });
             const result = await response.json();
             if (response.ok && result.success) {
@@ -2756,7 +2700,7 @@
             try {
                 const response = await fetch(`/claim-quest/${loggedInUsername}/${type}/${questId}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
                 });
                 const result = await response.json();
                 if (response.ok && result.success) {
