@@ -380,7 +380,7 @@ async function initialize() {
     }
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = port) => {
+    const startServer = async (portToTry = process.env.PORT || 80) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
