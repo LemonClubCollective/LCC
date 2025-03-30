@@ -1415,33 +1415,37 @@ async function postBlog() {
 }
 
 async function toggleWalletConnection() {
-            console.log('toggleWalletConnection called');
-            const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
-            if (!connectBtnStaking) {
-                console.error('Connect Wallet button not found');
-                return;
+    console.log('toggleWalletConnection called');
+    const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
+    if (!connectBtnStaking) {
+        console.error('Connect Wallet button not found');
+        return;
+    }
+    if (walletAddress) {
+        disconnectWallet();
+    } else if ('solana' in window) {
+        console.log('Solana object found:', window.solana);
+        const provider = window.solana;
+        try {
+            // Force connect even if isConnected is true, to ensure we get the public key
+            const response = await provider.connect();
+            walletAddress = provider.publicKey?.toString();
+            if (!walletAddress) {
+                throw new Error('No public key received from wallet');
             }
-            if (walletAddress) {
-                disconnectWallet();
-            } else if ('solana' in window) {
-                console.log('Solana object found:', window.solana);
-                const provider = window.solana;
-                try {
-                    if (!provider.isConnected) await provider.connect();
-                    walletAddress = provider.publicKey.toString();
-                    connectBtnStaking.textContent = 'Disconnect Solana Wallet';
-                    console.log('Updated button text to Disconnect Solana Wallet');
-                    document.getElementById('wallet-status').textContent = `Wallet: ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
-                    console.log('Wallet connected:', walletAddress);
-                } catch (error) {
-                    console.error('[Wallet] Connection failed:', error);
-                    alert('Wallet connection failed—check Phantom: ' + error.message);
-                }
-            } else {
-                alert('Install Phantom wallet!');
-                window.open('https://phantom.app/', '_blank');
-            }
+            connectBtnStaking.textContent = 'Disconnect Solana Wallet';
+            console.log('Updated button text to Disconnect Solana Wallet');
+            document.getElementById('wallet-status').textContent = `Wallet: ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+            console.log('Wallet connected:', walletAddress);
+        } catch (error) {
+            console.error('[Wallet] Connection failed:', error);
+            alert('Wallet connection failed—check Phantom: ' + error.message);
         }
+    } else {
+        alert('Install Phantom wallet!');
+        window.open('https://phantom.app/', '_blank');
+    }
+}
 
         function disconnectWallet() {
             if (window.solana) window.solana.disconnect();
