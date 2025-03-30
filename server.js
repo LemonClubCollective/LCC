@@ -712,7 +712,7 @@ app.post('/register', async (req, res) => {
         const newUser = { 
             email,
             password, 
-            username,
+            username: lowerUsername,
             nfts: [], 
             stakingPoints: 0,
             arcadePoints: 0,
@@ -769,19 +769,19 @@ app.post('/register', async (req, res) => {
 
 app.get('/verify-email/:username/:token', async (req, res) => {
     const { username, token } = req.params;
-    // Case-insensitive search for user
-    const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+    const lowerUsername = username.toLowerCase(); // Normalize to lowercase
+    const user = await db.collection('users').findOne({ username: lowerUsername });
     if (!user || user.verificationToken !== token) {
-        console.log(`[Verify-Email] Failed for ${username}: user=${JSON.stringify(user)}, token=${token}`);
+        console.log(`[Verify-Email] Failed for ${lowerUsername}: user=${JSON.stringify(user)}, token=${token}`);
         return res.status(400).send('Invalid verification token');
     }
     await db.collection('users').updateOne(
-        { username: { $regex: `^${username}$`, $options: 'i' } },
+        { username: lowerUsername },
         { $set: { isVerified: true, verificationToken: null } }
     );
-    users[username.toLowerCase()] = { ...user, isVerified: true, verificationToken: null }; // Sync users object
+    users[lowerUsername] = { ...user, isVerified: true, verificationToken: null };
     await saveData(users, 'users');
-    console.log(`[Verify-Email] Successfully verified ${username}`);
+    console.log(`[Verify-Email] Successfully verified ${lowerUsername}`);
     res.send('Email Verified! <a href="/">Click here to log in</a>');
 });
 
@@ -848,7 +848,7 @@ app.get('/node_modules/big-integer/big-integer.js', (req, res) => {
 
 app.post('/fix-user-case', async (req, res) => {
     try {
-        const username = 'Levi';
+        const username = 'Test123';
         const lowerUsername = username.toLowerCase();
         const user = users[username];
         if (user) {
