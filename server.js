@@ -29,7 +29,7 @@ const s3Client = new S3Client({
 });
 
 // Constants
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3001;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -44,6 +44,7 @@ if (!IMPORTED_TOKEN_METADATA_PROGRAM_ID) {
 // Initialize Express app
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); 
 app.use(express.static('public'));
 app.use(cors());
 
@@ -381,7 +382,7 @@ async function initialize() {
     }
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 80) => {
+    const startServer = async (portToTry = process.env.PORT || 3001) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
@@ -658,10 +659,14 @@ function requirePermission(permission) {
 // Ensure session is initialized
 const session = require('express-session');
 app.use(session({
-    secret: 'bc9bdf51beca4d820288cf27171c9f33b7ace452aca29f71efecb812bb5e023b', // Replace with a strong, unique secret in production
+    secret: 'bc9bdf51beca4d820288cf27171c9f33b7ace452aca29f71efecb812bb5e023b', 
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: true, maxAge: 24 * 60 * 60 * 1000 } // 24 hours, secure: false for local dev
+     cookie: { 
+        secure: false, // Set to false for local dev (http), true for production (https)
+        maxAge: 24 * 60 * 60 * 1000,
+        httpOnly: true
+    }
 }));
 
 // Debug logging middleware
@@ -784,21 +789,32 @@ app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) {
+            console.log('[Login] Missing credentials');
             return res.status(400).json({ error: 'Username and password required' });
         }
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user || user.password !== password) {
+        const lowerUsername = username.toLowerCase();
+        console.log('[Login] Querying for:', lowerUsername);
+        const user = await db.collection('users').findOne({ username: lowerUsername });
+        if (!user) {
+            console.log('[Login] User not found:', lowerUsername);
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+        if (user.password !== password) {
+            console.log('[Login] Password mismatch for:', lowerUsername);
             return res.status(401).json({ error: 'Invalid username or password' });
         }
         if (!user.isVerified) {
+            console.log('[Login] User not verified:', lowerUsername);
             return res.status(403).json({ error: 'Please verify your email first' });
         }
-        req.session.username = username; // Set session here
-        console.log('[Login] Session set for:', username);
-        loggedInUsername = username.toLowerCase();
-        const pointsAwarded = trackLoginStreak(username.toLowerCase());
-        user.lemonadePoints = getLemonadePoints(username.toLowerCase());
-        await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: user });
+        req.session.username = lowerUsername;
+        console.log('[Login] Session set for:', req.session.username);
+        loggedInUsername = lowerUsername;
+        const pointsAwarded = trackLoginStreak(lowerUsername);
+        console.log('[Login] Points awarded:', pointsAwarded);
+        user.lemonadePoints = getLemonadePoints(lowerUsername);
+        console.log('[Login] Lemonade points:', user.lemonadePoints);
+        await db.collection('users').updateOne({ username: lowerUsername }, { $set: user });
         res.json({ 
             success: true, 
             profilePic: user.profilePic, 
@@ -810,10 +826,10 @@ app.post('/login', async (req, res) => {
             mintingPoints: user.mintingPoints || 0,
             bonusPoints: user.bonusPoints || 0
         });
-	users[username.toLowerCase()] = user; // Sync here
-await saveData(users, 'users'); // Ensure saved
+        users[lowerUsername] = user;
+        await saveData(users, 'users');
     } catch (error) {
-        console.error('[Login] Error:', error.message);
+        console.error('[Login] Error:', error.message, error.stack);
         res.status(500).json({ error: 'Login failed' });
     }
 });
@@ -1445,6 +1461,7 @@ app.post('/nft/:username', async (req, res) => {
 });
 
 app.get('/profile/:username', async (req, res) => {
+ console.log('[Profile] Hit route for:', req.params.username); 
     try {
         const { username } = req.params;
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
@@ -1453,7 +1470,7 @@ app.get('/profile/:username', async (req, res) => {
         res.json({ 
             success: true, 
             username: user.username, 
-            profilePic: user.profilePic ? `/uploads/${user.profilePic.split('/').pop()}` : null, 
+               profilePic: user.profilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png', // Fix this
             lemonadePoints, // Use computed value
             stakingPoints: user.stakingPoints || 0, 
             arcadePoints: user.arcadePoints || 0, 
@@ -1488,16 +1505,21 @@ app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
     }
 });
 
-app.get('/quests/:username', async (req, res) => {
+app.get('/api/quests/:username', async (req, res) => {
+    console.log(`[Quest Fetch] Fetching quests for ${req.params.username}`);
     try {
         const { username } = req.params;
         const lowerUsername = username.toLowerCase();
-        if (!users[lowerUsername]) return res.status(404).json({ success: false, error: 'User not found' });
-        // Removed calls to reset functions since logic is in updateQuestProgress
-        res.json({ success: true, quests: users[lowerUsername].quests });
+        const user = await db.collection('users').findOne({ username: { $regex: `^${lowerUsername}$`, $options: 'i' } });
+        if (!user) {
+            console.error(`[Quest Fetch] User not found: ${lowerUsername}`);
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        const quests = user.quests || { daily: [], weekly: [], limited: [] };
+        res.json({ success: true, quests });
     } catch (error) {
-        console.error('[Quests] Error:', error.message);
-        res.status(500).json({ error: 'Failed to fetch quests' });
+        console.error('[Quest Fetch] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to fetch quests' });
     }
 });
 
@@ -1517,7 +1539,7 @@ app.get('/nft/:username', async (req, res) => {
     }
 });
 
-// server.js, replace entire function at line 2428
+
 app.post('/stake/:username/:mintAddress', async (req, res) => {
     try {
         const { username, mintAddress } = req.params;
@@ -1531,7 +1553,7 @@ app.post('/stake/:username/:mintAddress', async (req, res) => {
 
         nft.staked = true;
         nft.stakeStart = Date.now();
-        awardPoints(lowerUsername, 'staking', 50, `Staking NFT ${mintAddress.slice(0, 8)}...`);
+        user.stakingPoints = (user.stakingPoints || 0) + 50;
         updateQuestProgress(lowerUsername, 'weekly', 'grove-keeper', 1);
         await db.collection('users').updateOne(
             { username: { $regex: `^${username}$`, $options: 'i' } },
@@ -1717,7 +1739,7 @@ app.post('/posts/comment', async (req, res) => {
             likes: 0,
             likedBy: [],
             parentId: parentId ? new ObjectId(parentId) : null,
-            profilePic: profilePic || 'https://raw.githubusercontent.com/LemonClubCollective/NFT/main/PFP1.png'
+            profilePic: profilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png'
         };
         const result = await db.collection('posts').updateOne(
             { _id: new ObjectId(postId) },
@@ -2311,6 +2333,10 @@ async function setLeviAsAdmin() {
         console.error('[AdminSetup] Error setting Levi as admin:', error.message);
     }
 }
+
+console.log('[Route Check] Registered GET routes:', app._router.stack
+    .filter(r => r.route && r.route.methods.get)
+    .map(r => r.route.path));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
