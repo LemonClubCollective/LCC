@@ -1102,7 +1102,8 @@ async function mintNFT(button) {
         console.log('[Mint] Full Server Response:', data);
         console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
         const imageUri = `https://drahmlrfgetmm.cloudfront.net/usernft/nft_${Date.now()}.png`;
-        
+
+        // Transaction 1: Create and Initialize Mint
         console.log('[Mint] Signing Tx1 with Phantom...');
         if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
         const tx1Buffer = new Uint8Array(data.transaction1.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
@@ -1113,36 +1114,37 @@ async function mintNFT(button) {
         console.log('[Mint] Tx1 Signed:', signedTx1);
         const rawTx1 = signedTx1.serialize();
         console.log('[Mint] Serialized Tx1 length:', rawTx1.length);
-        const signature1 = await connection.sendTransaction(signedTx1, [], { skipPreflight: false }); // Changed
+        const signature1 = await connection.sendRawTransaction(rawTx1, { skipPreflight: false });
         console.log('[Mint] Transaction 1 Signature:', signature1);
-        const tx1Confirmation = await connection.confirmTransaction({
-            signature: signature1,
-            blockhash: transaction1.recentBlockhash,
-            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
-        }, { commitment: 'confirmed', maxRetries: 10 });
+        const tx1Confirmation = await connection.confirmTransaction(signature1, 'confirmed');
         if (tx1Confirmation.value.err) throw new Error('Tx1 failed: ' + JSON.stringify(tx1Confirmation.value.err));
         console.log('[Mint] Tx1 Confirmed');
 
+        // Transaction 2: Mint to User's Token Account
         console.log('[Mint] Signing Tx2 with Phantom...');
         if (!data.transaction2) throw new Error('Transaction2 missing from server response!');
         const tx2Buffer = new Uint8Array(data.transaction2.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
         console.log('[Mint] Tx2 Buffer:', tx2Buffer);
         const transaction2 = solanaWeb3.Transaction.from(tx2Buffer);
+        // Fetch a fresh blockhash for Tx2
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+        transaction2.recentBlockhash = blockhash;
         console.log('[Mint] Tx2 Deserialized:', transaction2);
         const signedTx2 = await window.solana.signTransaction(transaction2);
         console.log('[Mint] Tx2 Signed:', signedTx2);
         const rawTx2 = signedTx2.serialize();
         console.log('[Mint] Serialized Tx2 length:', rawTx2.length);
-        const signature2 = await connection.sendTransaction(signedTx2, [], { skipPreflight: false }); // Changed
+        const signature2 = await connection.sendRawTransaction(rawTx2, { skipPreflight: false });
         console.log('[Mint] Transaction 2 Signature:', signature2);
         const tx2Confirmation = await connection.confirmTransaction({
             signature: signature2,
-            blockhash: transaction2.recentBlockhash,
-            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
-        }, { commitment: 'confirmed', maxRetries: 10 });
+            blockhash: blockhash,
+            lastValidBlockHeight: lastValidBlockHeight
+        }, 'confirmed');
         if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
         console.log('[Mint] Tx2 Confirmed');
 
+        // Update points and UI
         mintingPoints = bigInt(mintingPoints || 0).add(25);
         lemonadePoints = bigInt(lemonadePoints || 0).add(25);
         updatePointsDisplay();

@@ -1692,6 +1692,10 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
     }
 });
 
+app.get('/solana-web3.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'node_modules', '@solana', 'web3.js', 'dist', 'index.js'));
+});
+
 app.post('/posts', async (req, res) => {
     try {
         const { wallet, content, username } = req.body;
