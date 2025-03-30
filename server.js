@@ -29,7 +29,7 @@ const s3Client = new S3Client({
 });
 
 // Constants
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3001;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -382,7 +382,7 @@ async function initialize() {
     }
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 80) => {
+    const startServer = async (portToTry = process.env.PORT || 3001) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
@@ -1270,7 +1270,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 
         upload(req, res, async (err) => {
             if (err) return res.status(500).json({ error: 'File upload failed' });
-            const profilePicUrl = `http://localhost:${port}/uploads/${req.file.filename}`;
+            const profilePicUrl = `https://lemonclub-env2.us-east-1.elasticbeanstalk.com/uploads/${req.file.filename}`;
             users[username.toLowerCase()].profilePic = profilePicUrl;
             await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
             await saveData(users, 'users');
