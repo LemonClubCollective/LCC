@@ -127,19 +127,21 @@ function createMetadataInstruction(
         TOKEN_METADATA_PROGRAM_ID
     )[0];
 
+    // Data structure for CreateMetadataAccountV3
     const data = Buffer.concat([
-        Buffer.from([0]), // Instruction type: CreateMetadataAccountV3
+        Buffer.from([4]), // Instruction type: CreateMetadataAccountV3 (updated from 0)
+        Buffer.from([0]), // DataArgs discriminator (0 for CreateMetadataAccountArgsV3)
         Buffer.from([name.length]), // Name length
-        Buffer.from(name), // Name
+        Buffer.from(name.padEnd(32, '\0')), // Name (padded to 32 bytes)
         Buffer.from([symbol.length]), // Symbol length
-        Buffer.from(symbol), // Symbol
+        Buffer.from(symbol.padEnd(10, '\0')), // Symbol (padded to 10 bytes)
         Buffer.from([uri.length]), // URI length
-        Buffer.from(uri), // URI
+        Buffer.from(uri.padEnd(200, '\0')), // URI (padded to 200 bytes)
         Buffer.from(Uint16Array.from([sellerFeeBasisPoints]).buffer), // Seller fee basis points
         Buffer.from([creators.length]), // Number of creators
         ...creators.map(creator => Buffer.concat([
             creator.address.toBuffer(),
-            Buffer.from([1]), // Verified
+            Buffer.from([creator.verified ? 1 : 0]), // Verified
             Buffer.from([creator.share]) // Share
         ])),
         Buffer.from([isMutable ? 1 : 0]), // Is mutable
@@ -149,11 +151,13 @@ function createMetadataInstruction(
     return new solanaWeb3.TransactionInstruction({
         programId: TOKEN_METADATA_PROGRAM_ID,
         keys: [
-            { pubkey: metadataAccount, isSigner: false, isWritable: true },
-            { pubkey: mint, isSigner: false, isWritable: false },
-            { pubkey: mintAuthority, isSigner: true, isWritable: false },
-            { pubkey: updateAuthority, isSigner: false, isWritable: false },
-            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false }
+            { pubkey: metadataAccount, isSigner: false, isWritable: true }, // Metadata account
+            { pubkey: mint, isSigner: false, isWritable: false }, // Mint
+            { pubkey: mintAuthority, isSigner: true, isWritable: false }, // Mint authority
+            { pubkey: userPubkey, isSigner: true, isWritable: false }, // Payer
+            { pubkey: updateAuthority, isSigner: false, isWritable: false }, // Update authority
+            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false }, // System program
+            { pubkey: solanaWeb3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false } // Rent
         ],
         data
     });
@@ -1080,10 +1084,11 @@ app.post('/api/mint-nft', async (req, res) => {
             `Lemon Seed #${tokenId}`,
             'LCC',
             `https://lemonclubcollective.com/usernft/nft_${tokenId}.json`,
-            [{ address: wallet.publicKey, share: 100 }],
+            [{ address: wallet.publicKey, share: 100, verified: true }],
             500,
             true,
-            false
+            false,
+            userPubkey // Pass userPubkey as the payer
         );
 
         const tx1 = new solanaWeb3.Transaction().add(mintAccount, initMint, metadataInstruction);
