@@ -1088,6 +1088,14 @@ async function mintNFT(button) {
         await window.solana.connect();
         const publicKey = window.solana.publicKey.toString();
         console.log('[Mint] Phantom wallet connected:', publicKey);
+
+        // Check user balance
+        const balance = await connection.getBalance(new solanaWeb3.PublicKey(publicKey));
+        console.log('[Mint] User balance:', balance);
+        if (balance < 10000) { // 0.00001 SOL
+            throw new Error('Insufficient funds for transaction fees. Please add more fake SOL from https://faucet.solana.com');
+        }
+
         console.log('[Mint] Fetching mint transaction...');
         const username = loggedInUsername || 'tester';
         if (!username) throw new Error('Please login to mint!');
@@ -1141,7 +1149,19 @@ async function mintNFT(button) {
             throw new Error('Tx2 is invalid: missing feePayer or recentBlockhash');
         }
         console.log('[Mint] Tx2 Fee Payer:', transaction2.feePayer.toString());
-        console.log('[Mint] Tx2 Instructions:', transaction2.instructions);
+        console.log('[Mint] Tx2 Program ID:', transaction2.instructions[0].programId.toString());
+        console.log('[Mint] Tx2 Keys:', transaction2.instructions[0].keys.map(key => key.pubkey.toString()));
+        // Simulate Tx2
+        try {
+            const simulation = await connection.simulateTransaction(transaction2);
+            console.log('[Mint] Tx2 Simulation:', simulation);
+            if (simulation.value.err) {
+                throw new Error('Tx2 simulation failed: ' + JSON.stringify(simulation.value.err));
+            }
+        } catch (simError) {
+            console.error('[Mint] Simulation error:', simError);
+            throw new Error('Tx2 simulation failed: ' + simError.message);
+        }
         // Fetch a fresh blockhash for Tx2
         let { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
         transaction2.recentBlockhash = blockhash;
