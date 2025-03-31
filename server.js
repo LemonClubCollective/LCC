@@ -115,7 +115,8 @@ function createMetadataInstruction(
     creators,
     sellerFeeBasisPoints,
     isMutable,
-    collection
+    collection,
+    userPubkey
 ) {
     const TOKEN_METADATA_PROGRAM_ID = new solanaWeb3.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
     const metadataAccount = solanaWeb3.PublicKey.findProgramAddressSync(
@@ -129,7 +130,7 @@ function createMetadataInstruction(
 
     // Data structure for CreateMetadataAccountV3
     const data = Buffer.concat([
-        Buffer.from([4]), // Instruction type: CreateMetadataAccountV3 (updated from 0)
+        Buffer.from([4]), // Instruction type: CreateMetadataAccountV3
         Buffer.from([0]), // DataArgs discriminator (0 for CreateMetadataAccountArgsV3)
         Buffer.from([name.length]), // Name length
         Buffer.from(name.padEnd(32, '\0')), // Name (padded to 32 bytes)
@@ -1030,6 +1031,11 @@ app.post('/api/mint-nft', async (req, res) => {
             TOKEN_PROGRAM_ID
         );
 
+        const tx1 = new solanaWeb3.Transaction().add(mintAccount, initMint);
+        tx1.feePayer = userPubkey;
+        tx1.recentBlockhash = (await connection.getLatestBlockhash('confirmed')).blockhash;
+        tx1.partialSign(wallet, mintKeypair);
+
         const tokenId = Date.now();
         const { imagePath, metadataPath } = await generateNFT(tokenId, 'Lemon Seed');
 
@@ -1077,25 +1083,6 @@ app.post('/api/mint-nft', async (req, res) => {
 
         if (!metadataFetched) throw new Error('Failed to fetch metadata from CloudFront');
 
-        const metadataInstruction = createMetadataInstruction(
-            mintKeypair.publicKey,
-            wallet.publicKey,
-            wallet.publicKey,
-            `Lemon Seed #${tokenId}`,
-            'LCC',
-            `https://lemonclubcollective.com/usernft/nft_${tokenId}.json`,
-            [{ address: wallet.publicKey, share: 100, verified: true }],
-            500,
-            true,
-            false,
-            userPubkey // Pass userPubkey as the payer
-        );
-
-        const tx1 = new solanaWeb3.Transaction().add(mintAccount, initMint, metadataInstruction);
-        tx1.feePayer = userPubkey;
-        tx1.recentBlockhash = (await connection.getLatestBlockhash('confirmed')).blockhash;
-        tx1.partialSign(wallet, mintKeypair);
-
         const associatedTokenAccount = await splToken.getAssociatedTokenAddress(
             mintKeypair.publicKey,
             userPubkey,
@@ -1128,6 +1115,21 @@ app.post('/api/mint-nft', async (req, res) => {
             TOKEN_PROGRAM_ID
         );
         instructions.push(mintTo);
+
+        const metadataInstruction = createMetadataInstruction(
+            mintKeypair.publicKey,
+            wallet.publicKey,
+            wallet.publicKey,
+            `Lemon Seed #${tokenId}`,
+            'LCC',
+            `https://lemonclubcollective.com/usernft/nft_${tokenId}.json`,
+            [{ address: wallet.publicKey, share: 100, verified: true }],
+            500,
+            true,
+            false,
+            userPubkey
+        );
+        instructions.push(metadataInstruction);
 
         const tx2 = new solanaWeb3.Transaction().add(...instructions);
         tx2.feePayer = userPubkey;
