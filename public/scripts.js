@@ -1140,8 +1140,10 @@ async function mintNFT(button) {
         if (!transaction2.feePayer || !transaction2.recentBlockhash) {
             throw new Error('Tx2 is invalid: missing feePayer or recentBlockhash');
         }
+        console.log('[Mint] Tx2 Fee Payer:', transaction2.feePayer.toString());
+        console.log('[Mint] Tx2 Instructions:', transaction2.instructions);
         // Fetch a fresh blockhash for Tx2
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+        let { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
         transaction2.recentBlockhash = blockhash;
         console.log('[Mint] Tx2 Deserialized:', transaction2);
         let signedTx2;
@@ -1157,10 +1159,11 @@ async function mintNFT(button) {
                 console.warn(`[Mint] Tx2 signing attempt ${attempts} failed:`, signError);
                 if (attempts === maxAttempts) throw new Error('Failed to sign Tx2 after retries: ' + signError.message);
                 // Refresh blockhash on retry
-                const { blockhash: newBlockhash, lastValidBlockHeight: newLastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-                transaction2.recentBlockhash = newBlockhash;
-                lastValidBlockHeight = newLastValidBlockHeight;
-                console.log('[Mint] Refreshed blockhash for Tx2 retry:', newBlockhash);
+                const newBlockData = await connection.getLatestBlockhash('confirmed');
+                blockhash = newBlockData.blockhash;
+                lastValidBlockHeight = newBlockData.lastValidBlockHeight;
+                transaction2.recentBlockhash = blockhash;
+                console.log('[Mint] Refreshed blockhash for Tx2 retry:', blockhash);
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
