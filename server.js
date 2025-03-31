@@ -80,6 +80,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/output', express.static(path.join(__dirname, 'output')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/videos', express.static(path.join(__dirname, 'videos')));
+app.use('/node_modules', express.static('node_modules'))
+
+
 
 // Ensure these directories exist
 const requiredDirs = ['uploads', 'output', 'public', 'videos'];
@@ -944,143 +947,141 @@ app.post('/api/mint-nft', async (req, res) => {
     try {
         const { walletAddress, username } = req.body;
         if (!walletAddress || !username) {
-            console.error('[Server] Missing walletAddress or username');
-            return res.status(400).json({ error: 'Wallet address and username required' });
+            console.log('[Mint] Missing walletAddress or username');
+            return res.status(400).json({ error: 'Missing required fields' });
         }
-        console.log('[Server] Starting mint process for user:', username, 'wallet:', walletAddress);
+        console.log('[Mint] Starting mint for:', username, walletAddress);
 
-        const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
-        const userPubkey = new solanaWeb3.PublicKey(walletAddress);
-        const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-        const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-
-        const mintKeypair = solanaWeb3.Keypair.generate();
+        const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+        const userPubkey = new PublicKey(walletAddress);
+        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+        const mintKeypair = Keypair.generate();
         const mintPublicKey = mintKeypair.publicKey.toBase58();
-        console.log('[Server] Server Pubkey:', wallet.publicKey.toBase58());
-        console.log('[Server] Mint Pubkey:', mintPublicKey);
+        console.log('[Mint] Mint Pubkey:', mintPublicKey);
 
-        // Tx1: Create and initialize mint
+        // Transaction 1: Create and Initialize Mint
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
-        const mintAccount = solanaWeb3.SystemProgram.createAccount({
-            fromPubkey: userPubkey,
-            newAccountPubkey: mintKeypair.publicKey,
-            space: 82,
-            lamports: lamports,
-            programId: TOKEN_PROGRAM_ID
-        });
-        const initMint = splToken.createInitializeMintInstruction(
-            mintKeypair.publicKey,
-            0, // NFT: 0 decimals
-            wallet.publicKey, // Mint authority (server)
-            null, // Freeze authority
-            TOKEN_PROGRAM_ID
+        const tx1 = new Transaction().add(
+            SystemProgram.createAccount({
+                fromPubkey: userPubkey,
+                newAccountPubkey: mintKeypair.publicKey,
+                lamports,
+                space: 82,
+                programId: TOKEN_PROGRAM_ID
+            }),
+            createInitializeMintInstruction(
+                mintKeypair.publicKey,
+                0,
+                wallet.publicKey, // Mint authority
+                null,
+                TOKEN_PROGRAM_ID
+            )
         );
-        const tx1 = new solanaWeb3.Transaction().add(mintAccount, initMint);
-        tx1.feePayer = userPubkey;
-        tx1.recentBlockhash = (await connection.getLatestBlockhash('confirmed')).blockhash;
-        tx1.partialSign(wallet, mintKeypair);
-        console.log('[Server] Tx1 prepared');
 
-        // Generate NFT assets
-        const tokenId = Date.now();
-        console.log('[Server] Generating NFT for tokenId:', tokenId);
-        const { imagePath, metadataPath } = await generateNFT(tokenId, 'Lemon Seed');
-        console.log('[Server] Generated NFT - imagePath:', imagePath, 'metadataPath:', metadataPath);
-
-        // Verify S3 availability
-        const metadataKey = `usernft/nft_${tokenId}.json`;
-        let attempts = 0;
-        const maxAttempts = 10;
-        while (attempts < maxAttempts) {
-            try {
-                await s3Client.send(new HeadObjectCommand({
-                    Bucket: 'lemonclub-nftgen',
-                    Key: metadataKey
-                }));
-                console.log('[Server] Metadata verified in S3:', metadataKey);
-                break;
-            } catch (error) {
-                console.warn(`[Server] S3 check failed (attempt ${attempts + 1}/${maxAttempts}):`, error.message);
-                attempts++;
-                if (attempts === maxAttempts) throw new Error('Metadata not available in S3');
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-        }
-
-        // Verify CloudFront availability
-        attempts = 0;
-        while (attempts < maxAttempts) {
-            try {
-                const response = await axios.get(metadataPath, { responseType: 'json' });
-                console.log('[Server] Metadata fetched from CloudFront:', metadataPath);
-                break;
-            } catch (error) {
-                console.warn(`[Server] CloudFront check failed (attempt ${attempts + 1}/${maxAttempts}):`, error.message);
-                attempts++;
-                if (attempts === maxAttempts) throw new Error('Metadata not accessible via CloudFront');
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-        }
-
-        // Build metadata instructions
-        const metadataPDA = await metaplex.nfts().pdas().metadata({ mint: mintKeypair.publicKey });
-        const metadataBuilder = metaplex.nfts().builders().createMetadata({
-            metadata: metadataPDA,
-            mint: mintKeypair.publicKey,
-            mintAuthority: wallet.publicKey,
-            updateAuthority: wallet.publicKey,
-            name: `Lemon Seed #${tokenId}`,
-            symbol: 'LCC',
-            uri: metadataPath,
-            sellerFeeBasisPoints: 500,
-            creators: [{ address: wallet.publicKey, share: 100, verified: true }],
-            isMutable: true,
-            collection: null
-        });
-        const metadataInstructions = metadataBuilder.getInstructions();
-        console.log('[Server] Metadata instructions generated');
-
-        // Tx2: Token account, minting, and metadata
-        const associatedTokenAccount = await splToken.getAssociatedTokenAddress(
+        // Transaction 2: Create ATA and Mint To
+        const tokenAccount = await getAssociatedTokenAddress(
             mintKeypair.publicKey,
             userPubkey,
             false,
             TOKEN_PROGRAM_ID,
             ASSOCIATED_TOKEN_PROGRAM_ID
         );
-        const tokenAccountInfo = await connection.getAccountInfo(associatedTokenAccount);
-        const instructions = [];
-
-        if (!tokenAccountInfo) {
-            const createATA = splToken.createAssociatedTokenAccountInstruction(
+        const tx2 = new Transaction().add(
+            createAssociatedTokenAccountInstruction(
                 userPubkey,
-                associatedTokenAccount,
+                tokenAccount,
                 userPubkey,
                 mintKeypair.publicKey,
                 TOKEN_PROGRAM_ID,
                 ASSOCIATED_TOKEN_PROGRAM_ID
-            );
-            instructions.push(createATA);
-            console.log('[Server] Added ATA creation to Tx2');
+            ),
+            createMintToInstruction(
+                mintKeypair.publicKey,
+                tokenAccount,
+                wallet.publicKey,
+                1,
+                [],
+                TOKEN_PROGRAM_ID
+            )
+        );
+
+        // Generate NFT assets
+        const tokenId = Date.now();
+        console.log('[Mint] Generating NFT for tokenId:', tokenId);
+        let imagePath, metadataPath;
+        try {
+            const result = await generateNFT(tokenId, 'Lemon Seed');
+            imagePath = result.imagePath;
+            metadataPath = result.metadataPath;
+        } catch (error) {
+            console.error('[Mint] Failed to generate NFT:', error);
+            throw new Error('NFT generation failed: ' + error.message);
+        }
+        console.log('[Mint] Image:', imagePath, 'Metadata:', metadataPath);
+
+        // Verify metadata in S3
+        const metadataKey = `usernft/nft_${tokenId}.json`;
+        let attempts = 0;
+        const maxAttempts = 10;
+        let metadataAvailable = false;
+        while (attempts < maxAttempts) {
+            try {
+                await s3Client.send(new HeadObjectCommand({
+                    Bucket: 'lemonclub-nftgen',
+                    Key: metadataKey
+                }));
+                console.log(`[Mint] Metadata verified in S3: ${metadataKey}`);
+                metadataAvailable = true;
+                break;
+            } catch (error) {
+                console.warn(`[Mint] Metadata not yet available in S3 (attempt ${attempts + 1}/${maxAttempts}):`, error);
+                attempts++;
+                if (attempts === maxAttempts) throw new Error('Metadata not available in S3 after retries');
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+        }
+        if (!metadataAvailable) throw new Error('Failed to verify metadata in S3');
+
+        // Verify metadata in CloudFront
+        attempts = 0;
+        let metadataFetched = false;
+        while (attempts < maxAttempts) {
+            try {
+                await axios.get(metadataPath, { responseType: 'json' });
+                console.log(`[Mint] Metadata fetched from CloudFront: ${metadataPath}`);
+                metadataFetched = true;
+                break;
+            } catch (error) {
+                console.warn(`[Mint] Failed to fetch metadata from CloudFront (attempt ${attempts + 1}/${maxAttempts}):`, error.message);
+                attempts++;
+                if (attempts === maxAttempts) throw new Error('Metadata not accessible via CloudFront after retries');
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+        }
+        if (!metadataFetched) throw new Error('Failed to fetch metadata from CloudFront');
+
+        // Create NFT with Metaplex (server-side)
+        console.log('[Mint] Creating NFT with Metaplex...');
+        let nft;
+        try {
+            nft = await metaplex.nfts().create({
+                uri: metadataPath,
+                name: `Lemon Seed #${tokenId}`,
+                symbol: 'LSEED',
+                sellerFeeBasisPoints: 500,
+                creators: [{ address: wallet.publicKey, share: 100 }],
+                collection: null,
+                uses: null
+            });
+            console.log('[Mint] NFT created:', nft);
+        } catch (error) {
+            console.error('[Mint] Metaplex NFT creation failed:', error);
+            throw new Error('Metaplex NFT creation failed: ' + error.message);
         }
 
-        const mintTo = splToken.createMintToInstruction(
-            mintKeypair.publicKey,
-            associatedTokenAccount,
-            wallet.publicKey,
-            1, // 1 token (NFT)
-            [],
-            TOKEN_PROGRAM_ID
-        );
-        instructions.push(mintTo);
-
-        const tx2 = new solanaWeb3.Transaction().add(...metadataInstructions, ...instructions);
-        tx2.feePayer = userPubkey;
-        tx2.recentBlockhash = (await connection.getLatestBlockhash('confirmed')).blockhash;
-        tx2.partialSign(wallet);
-        console.log('[Server] Tx2 prepared with metadata, ATA, and mintTo');
-
         // Update user data
+        const lowerUsername = username.toLowerCase();
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) throw new Error('User not found');
         if (!user.nfts) user.nfts = [];
@@ -1092,61 +1093,37 @@ app.post('/api/mint-nft', async (req, res) => {
             stakeStart: 0,
             lastPoints: 0
         });
-        await db.collection('users').updateOne(
-            { username: { $regex: `^${username}$`, $options: 'i' } },
-            { $set: user }
-        );
-        users[username.toLowerCase()] = user;
-        await saveData(users, 'users');
-        awardPoints(username.toLowerCase(), 'minting', 25, `Minting NFT ${mintPublicKey.slice(0, 8)}...`);
-        updateQuestProgress(username.toLowerCase(), 'limited', 'launch-party', 1);
+        try {
+            await db.collection('users').updateOne(
+                { username: { $regex: `^${username}$`, $options: 'i' } },
+                { $set: user }
+            );
+            users[lowerUsername] = user;
+            await saveData(users, 'users');
+        } catch (error) {
+            console.error('[Mint] Failed to update user data:', error);
+            throw new Error('User data update failed: ' + error.message);
+        }
 
-        // Serialize transactions
-        const serializedTx1 = Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex');
-        const serializedTx2 = Buffer.from(tx2.serialize({ requireAllSignatures: false })).toString('hex');
-        console.log('[Server] Transactions serialized and ready');
+        awardPoints(lowerUsername, 'minting', 25, `Minting NFT ${mintPublicKey.slice(0, 8)}...`);
+        updateQuestProgress(lowerUsername, 'limited', 'launch-party', 1);
+
+        const blockhash = await connection.getLatestBlockhash();
+        tx1.recentBlockhash = blockhash.blockhash;
+        tx2.recentBlockhash = blockhash.blockhash;
+        tx1.feePayer = userPubkey;
+        tx2.feePayer = userPubkey;
+        tx1.partialSign(mintKeypair);
+        tx2.partialSign(wallet);
 
         res.json({
-            transaction1: serializedTx1,
-            transaction2: serializedTx2,
+            transaction1: Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex'),
+            transaction2: Buffer.from(tx2.serialize({ requireAllSignatures: false })).toString('hex'),
             mintPublicKey
         });
     } catch (error) {
-        console.error('[Server] Mint Error:', error.stack);
+        console.error('[Mint] Error:', error);
         res.status(500).json({ error: 'Failed to prepare mint transaction', details: error.message });
-    }
-});
-
-app.post('/api/create-token-account', async (req, res) => {
-    try {
-        const { walletAddress, mintPublicKey } = req.body;
-        if (!walletAddress || !mintPublicKey) {
-            return res.status(400).json({ error: 'Wallet address and mint public key are required' });
-        }
-
-        const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-        const mintPubkey = new PublicKey(mintPublicKey);
-        const tokenAccount = await getAssociatedTokenAddress(mintPubkey, new PublicKey(walletAddress));
-
-        const transaction = new Transaction().add(
-            createAssociatedTokenAccountInstruction(
-                new PublicKey(walletAddress),
-                tokenAccount,
-                new PublicKey(walletAddress),
-                mintPubkey
-            )
-        );
-        const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = new PublicKey(walletAddress);
-
-        const serializedTransaction = transaction.serialize({ requireAllSignatures: false }).toString('base64');
-        console.log('[Server] Token Account Transaction Prepared:', tokenAccount.toBase58());
-
-        res.json({ tokenAccount: tokenAccount.toBase58(), transaction: serializedTransaction });
-    } catch (error) {
-        console.error('[Server Error] Preparing token account transaction:', error);
-        res.status(500).json({ error: 'Failed to prepare token account transaction', details: error.message });
     }
 });
 

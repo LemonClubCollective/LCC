@@ -1082,122 +1082,59 @@ async function mintNFT(button) {
         return;
     }
     console.log('[Mint] Solana Web3 confirmed:', window.solana);
+
     const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
     button.classList.add('loading');
+
     try {
         await window.solana.connect();
         const publicKey = window.solana.publicKey.toString();
         console.log('[Mint] Phantom wallet connected:', publicKey);
-
-        // Check user balance
-        const balance = await connection.getBalance(new solanaWeb3.PublicKey(publicKey));
-        console.log('[Mint] User balance:', balance);
-        if (balance < 10000) { // 0.00001 SOL
-            throw new Error('Insufficient funds for transaction fees. Please add more fake SOL from https://faucet.solana.com');
-        }
-
         console.log('[Mint] Fetching mint transaction...');
         const username = loggedInUsername || 'tester';
         if (!username) throw new Error('Please login to mint!');
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const baseUrl = isLocal ? 'http://localhost:80' : 'https://lemonclubcollective.com';
-        const response = await fetch(`${baseUrl}/api/mint-nft`, {
+
+        const response = await fetch('https://lemonclubcollective.com/api/mint-nft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress: publicKey, username: username }),
-            credentials: 'include'
+            body: JSON.stringify({ walletAddress: publicKey, username: username })
         });
+
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
         const data = await response.json();
         console.log('[Mint] Full Server Response:', data);
         console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
-        const imageUri = `${baseUrl}/usernft/nft_${Date.now()}.png`;
+        const imageUri = `https://lemonclubcollective.com/output/nft_${Date.now()}.png`;
 
-        // Transaction 1: Create and Initialize Mint
         console.log('[Mint] Signing Tx1 with Phantom...');
         if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
         const tx1Buffer = new Uint8Array(data.transaction1.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        console.log('[Mint] Tx1 Buffer:', tx1Buffer);
         const transaction1 = solanaWeb3.Transaction.from(tx1Buffer);
-        console.log('[Mint] Tx1 Deserialized:', transaction1);
         const signedTx1 = await window.solana.signTransaction(transaction1);
-        console.log('[Mint] Tx1 Signed:', signedTx1);
-        const rawTx1 = signedTx1.serialize();
-        console.log('[Mint] Serialized Tx1 length:', rawTx1.length);
-        const signature1 = await connection.sendRawTransaction(rawTx1, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed'
-        });
+        const signature1 = await connection.sendRawTransaction(signedTx1.serialize());
         console.log('[Mint] Transaction 1 Signature:', signature1);
-        const blockHeight1 = await connection.getBlockHeight();
+
         const tx1Confirmation = await connection.confirmTransaction({
             signature: signature1,
             blockhash: transaction1.recentBlockhash,
-            lastValidBlockHeight: blockHeight1 + 150
+            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
         }, { commitment: 'confirmed', maxRetries: 10 });
         if (tx1Confirmation.value.err) throw new Error('Tx1 failed: ' + JSON.stringify(tx1Confirmation.value.err));
         console.log('[Mint] Tx1 Confirmed');
 
-        // Transaction 2: Mint to User's Token Account
         console.log('[Mint] Signing Tx2 with Phantom...');
         if (!data.transaction2) throw new Error('Transaction2 missing from server response!');
         const tx2Buffer = new Uint8Array(data.transaction2.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        console.log('[Mint] Tx2 Buffer:', tx2Buffer);
         const transaction2 = solanaWeb3.Transaction.from(tx2Buffer);
-        // Validate Tx2
-        if (!transaction2.feePayer || !transaction2.recentBlockhash) {
-            throw new Error('Tx2 is invalid: missing feePayer or recentBlockhash');
-        }
-        console.log('[Mint] Tx2 Fee Payer:', transaction2.feePayer.toString());
-        console.log('[Mint] Tx2 Program ID:', transaction2.instructions[0].programId.toString());
-        console.log('[Mint] Tx2 Keys:', transaction2.instructions[0].keys.map(key => key.pubkey.toString()));
-        // Simulate Tx2
-        try {
-            const simulation = await connection.simulateTransaction(transaction2);
-            console.log('[Mint] Tx2 Simulation:', simulation);
-            if (simulation.value.err) {
-                throw new Error('Tx2 simulation failed: ' + JSON.stringify(simulation.value.err));
-            }
-        } catch (simError) {
-            console.error('[Mint] Simulation error:', simError);
-            throw new Error('Tx2 simulation failed: ' + simError.message);
-        }
-        // Fetch a fresh blockhash for Tx2
-        let { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
-        transaction2.recentBlockhash = blockhash;
-        console.log('[Mint] Tx2 Deserialized:', transaction2);
-        let signedTx2;
-        let attempts = 0;
-        const maxAttempts = 3;
-        while (attempts < maxAttempts) {
-            try {
-                signedTx2 = await window.solana.signTransaction(transaction2);
-                console.log('[Mint] Tx2 Signed:', signedTx2);
-                break;
-            } catch (signError) {
-                attempts++;
-                console.warn(`[Mint] Tx2 signing attempt ${attempts} failed:`, signError);
-                if (attempts === maxAttempts) throw new Error('Failed to sign Tx2 after retries: ' + signError.message);
-                // Refresh blockhash on retry
-                const newBlockData = await connection.getLatestBlockhash('confirmed');
-                blockhash = newBlockData.blockhash;
-                lastValidBlockHeight = newBlockData.lastValidBlockHeight;
-                transaction2.recentBlockhash = blockhash;
-                console.log('[Mint] Refreshed blockhash for Tx2 retry:', blockhash);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-        }
-        const rawTx2 = signedTx2.serialize();
-        console.log('[Mint] Serialized Tx2 length:', rawTx2.length);
-        const signature2 = await connection.sendRawTransaction(rawTx2, {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed'
-        });
+        const signedTx2 = await window.solana.signTransaction(transaction2);
+        const signature2 = await connection.sendRawTransaction(signedTx2.serialize());
         console.log('[Mint] Transaction 2 Signature:', signature2);
+
         const tx2Confirmation = await connection.confirmTransaction({
             signature: signature2,
             blockhash: transaction2.recentBlockhash,
-            lastValidBlockHeight: lastValidBlockHeight
+            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
         }, { commitment: 'confirmed', maxRetries: 10 });
         if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
         console.log('[Mint] Tx2 Confirmed');
@@ -1205,6 +1142,7 @@ async function mintNFT(button) {
         mintingPoints = bigInt(mintingPoints || 0).add(25);
         lemonadePoints = bigInt(lemonadePoints || 0).add(25);
         updatePointsDisplay();
+
         await updateNFTDisplay('nft-info');
         await updateQuestProgressClient('launch-party', 'limited', 1);
         alert('NFT minted successfully with metadata! Check your Phantom wallet.');
@@ -1216,7 +1154,6 @@ async function mintNFT(button) {
         button.classList.remove('loading');
     }
 }
-
 async function stakeNFT(mintAddress) {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect wallet to stake!');
