@@ -105,64 +105,6 @@ let metaplex;
 let transporter;
 let db;
 
-function createMetadataInstruction(
-    mint,
-    mintAuthority,
-    updateAuthority,
-    name,
-    symbol,
-    uri,
-    creators,
-    sellerFeeBasisPoints,
-    isMutable,
-    collection,
-    userPubkey
-) {
-    const TOKEN_METADATA_PROGRAM_ID = new solanaWeb3.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-    const metadataAccount = solanaWeb3.PublicKey.findProgramAddressSync(
-        [
-            Buffer.from('metadata'),
-            TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-            mint.toBuffer()
-        ],
-        TOKEN_METADATA_PROGRAM_ID
-    )[0];
-
-    // Data structure for CreateMetadataAccountV3
-    const data = Buffer.concat([
-        Buffer.from([4]), // Instruction type: CreateMetadataAccountV3
-        Buffer.from([0]), // DataArgs discriminator (0 for CreateMetadataAccountArgsV3)
-        Buffer.from([name.length]), // Name length
-        Buffer.from(name.padEnd(32, '\0')), // Name (padded to 32 bytes)
-        Buffer.from([symbol.length]), // Symbol length
-        Buffer.from(symbol.padEnd(10, '\0')), // Symbol (padded to 10 bytes)
-        Buffer.from([uri.length]), // URI length
-        Buffer.from(uri.padEnd(200, '\0')), // URI (padded to 200 bytes)
-        Buffer.from(Uint16Array.from([sellerFeeBasisPoints]).buffer), // Seller fee basis points
-        Buffer.from([creators.length]), // Number of creators
-        ...creators.map(creator => Buffer.concat([
-            creator.address.toBuffer(),
-            Buffer.from([creator.verified ? 1 : 0]), // Verified
-            Buffer.from([creator.share]) // Share
-        ])),
-        Buffer.from([isMutable ? 1 : 0]), // Is mutable
-        Buffer.from([collection ? 1 : 0]) // Has collection
-    ]);
-
-    return new solanaWeb3.TransactionInstruction({
-        programId: TOKEN_METADATA_PROGRAM_ID,
-        keys: [
-            { pubkey: metadataAccount, isSigner: false, isWritable: true }, // Metadata account
-            { pubkey: mint, isSigner: false, isWritable: false }, // Mint
-            { pubkey: mintAuthority, isSigner: true, isWritable: false }, // Mint authority
-            { pubkey: userPubkey, isSigner: true, isWritable: false }, // Payer
-            { pubkey: updateAuthority, isSigner: false, isWritable: false }, // Update authority
-            { pubkey: solanaWeb3.SystemProgram.programId, isSigner: false, isWritable: false }, // System program
-            { pubkey: solanaWeb3.SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false } // Rent
-        ],
-        data
-    });
-}
 
 const nftLayers = {
     backgrounds: [
@@ -1003,6 +945,8 @@ app.post('/api/mint-nft', async (req, res) => {
         const { walletAddress, username } = req.body;
         if (!walletAddress || !username) return res.status(400).json({ error: 'Wallet address and username required' });
 
+        console.log('[MintNFT] Starting mint process for user:', username, 'wallet:', walletAddress);
+
         const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
         const userPubkey = new solanaWeb3.PublicKey(walletAddress);
         const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -1037,7 +981,9 @@ app.post('/api/mint-nft', async (req, res) => {
         tx1.partialSign(wallet, mintKeypair);
 
         const tokenId = Date.now();
+        console.log('[Server] Generating NFT for tokenId:', tokenId);
         const { imagePath, metadataPath } = await generateNFT(tokenId, 'Lemon Seed');
+        console.log('[Server] Generated NFT - imagePath:', imagePath, 'metadataPath:', metadataPath);
 
         // Verify the metadata is available in S3 before proceeding
         const metadataKey = `usernft/nft_${tokenId}.json`;
@@ -1054,8 +1000,8 @@ app.post('/api/mint-nft', async (req, res) => {
                 metadataAvailable = true;
                 break;
             } catch (error) {
-                console.warn(`[Server] Metadata not yet available in S3 (attempt ${attempts + 1}/${maxAttempts}):`, error);
-                console.warn('[Server] Full error details:', JSON.stringify(error, null, 2));
+                console.warn(`[Server] Metadata not yet available in S3 (attempt ${attempts + 1}/${maxAttempts}):`, error.message);
+                console.warn('[Server] Full S3 error details:', JSON.stringify(error, null, 2));
                 attempts++;
                 if (attempts === maxAttempts) throw new Error('Metadata not available in S3 after retries');
                 await new Promise(resolve => setTimeout(resolve, 5000));
@@ -1069,12 +1015,13 @@ app.post('/api/mint-nft', async (req, res) => {
         let metadataFetched = false;
         while (attempts < maxAttempts) {
             try {
-                await axios.get(metadataPath, { responseType: 'json' });
-                console.log(`[Server] Metadata fetched from CloudFront: ${metadataPath}`);
+                const response = await axios.get(metadataPath, { responseType: 'json' });
+                console.log(`[Server] Metadata fetched from CloudFront: ${metadataPath}`, response.data);
                 metadataFetched = true;
                 break;
             } catch (error) {
                 console.warn(`[Server] Failed to fetch metadata from CloudFront (attempt ${attempts + 1}/${maxAttempts}): ${error.message}`);
+                console.warn('[Server] Full CloudFront error details:', JSON.stringify(error, null, 2));
                 attempts++;
                 if (attempts === maxAttempts) throw new Error('Metadata not accessible via CloudFront after retries');
                 await new Promise(resolve => setTimeout(resolve, 5000));
@@ -1082,6 +1029,22 @@ app.post('/api/mint-nft', async (req, res) => {
         }
 
         if (!metadataFetched) throw new Error('Failed to fetch metadata from CloudFront');
+
+        // Create metadata using Metaplex's lower-level API
+        const metadataPDA = await metaplex.nfts().pdas().metadata({ mint: mintKeypair.publicKey });
+        const metadataTx = await metaplex.nfts().builders().createMetadata({
+            metadata: metadataPDA,
+            mint: mintKeypair.publicKey,
+            mintAuthority: wallet.publicKey,
+            updateAuthority: wallet.publicKey,
+            name: `Lemon Seed #${tokenId}`,
+            symbol: 'LCC',
+            uri: metadataPath,
+            sellerFeeBasisPoints: 500,
+            creators: [{ address: wallet.publicKey, share: 100, verified: true }],
+            isMutable: true,
+            collection: null
+        }).build();
 
         const associatedTokenAccount = await splToken.getAssociatedTokenAddress(
             mintKeypair.publicKey,
@@ -1115,21 +1078,6 @@ app.post('/api/mint-nft', async (req, res) => {
             TOKEN_PROGRAM_ID
         );
         instructions.push(mintTo);
-
-        const metadataInstruction = createMetadataInstruction(
-            mintKeypair.publicKey,
-            wallet.publicKey,
-            wallet.publicKey,
-            `Lemon Seed #${tokenId}`,
-            'LCC',
-            `https://lemonclubcollective.com/usernft/nft_${tokenId}.json`,
-            [{ address: wallet.publicKey, share: 100, verified: true }],
-            500,
-            true,
-            false,
-            userPubkey
-        );
-        instructions.push(metadataInstruction);
 
         const tx2 = new solanaWeb3.Transaction().add(...instructions);
         tx2.feePayer = userPubkey;
