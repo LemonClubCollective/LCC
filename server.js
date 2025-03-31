@@ -940,73 +940,54 @@ app.post('/fix-timestamps', async (req, res) => {
 app.post('/api/mint-nft', async (req, res) => {
     try {
         const { walletAddress, username } = req.body;
-        if (!walletAddress || !username) return res.status(400).json({ error: 'Missing required fields' });
+        if (!walletAddress || !username) return res.status(400).json({ error: 'Wallet address and username required' });
 
-	if (!metaplex || !wallet) {
-            console.error('[MintNFT] Solana/Metaplex not initialized');
-            return res.status(500).json({ error: 'Solana/Metaplex not initialized' });
-        }
+        const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+        const userPubkey = new solanaWeb3.PublicKey(walletAddress);
+        const TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+        const ASSOCIATED_TOKEN_PROGRAM_ID = new solanaWeb3.PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+        const TOKEN_METADATA_PROGRAM_ID = new solanaWeb3.PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
-        const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
-        const userPubkey = new PublicKey(walletAddress);
-        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-        const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-        const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-
-        const mintKeypair = Keypair.generate();
+        const mintKeypair = solanaWeb3.Keypair.generate();
         const mintPublicKey = mintKeypair.publicKey.toBase58();
 
         console.log('[Server] Server Pubkey:', wallet.publicKey.toBase58());
         console.log('[Server] Mint Pubkey:', mintPublicKey);
 
-        const tx1 = new Transaction();
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
-        tx1.add(
-            SystemProgram.createAccount({
-                fromPubkey: userPubkey,
-                newAccountPubkey: mintKeypair.publicKey,
-                lamports,
-                space: 82,
-                programId: TOKEN_PROGRAM_ID
-            }),
-            createInitializeMintInstruction(
-                mintKeypair.publicKey,
-                0,
-                wallet.publicKey, // Mint authority
-                null,
-                TOKEN_PROGRAM_ID
-            )
-        );
+        const mintAccount = solanaWeb3.SystemProgram.createAccount({
+            fromPubkey: userPubkey,
+            newAccountPubkey: mintKeypair.publicKey,
+            space: 82,
+            lamports: lamports,
+            programId: TOKEN_PROGRAM_ID
+        });
 
-        const tokenAccount = await getAssociatedTokenAddress(
+        const initMint = splToken.createInitializeMintInstruction(
             mintKeypair.publicKey,
-            userPubkey,
-            false,
-            TOKEN_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID
-        );
-        tx1.add(
-            createAssociatedTokenAccountInstruction(
-                userPubkey,
-                tokenAccount,
-                userPubkey,
-                mintKeypair.publicKey,
-                TOKEN_PROGRAM_ID,
-                ASSOCIATED_TOKEN_PROGRAM_ID
-            )
+            0,
+            wallet.publicKey, // Mint authority
+            null,
+            TOKEN_PROGRAM_ID
         );
 
-        const tx2 = new Transaction();
-        tx2.add(
-            createMintToInstruction(
-                mintKeypair.publicKey,
-                tokenAccount,
-                wallet.publicKey, // Mint authority
-                1,
-                [],
-                TOKEN_PROGRAM_ID
-            )
+        const metadataInstruction = createMetadataInstruction(
+            mintKeypair.publicKey,
+            wallet.publicKey,
+            wallet.publicKey,
+            `Lemon Seed #${tokenId}`,
+            'LCC',
+            `https://lemonclubcollective.com/usernft/nft_${tokenId}.json`,
+            [],
+            0,
+            true,
+            true
         );
+
+        const tx1 = new solanaWeb3.Transaction().add(mintAccount, initMint, metadataInstruction);
+        tx1.feePayer = userPubkey;
+        tx1.recentBlockhash = (await connection.getLatestBlockhash('confirmed')).blockhash;
+        tx1.partialSign(wallet, mintKeypair);
 
         const tokenId = Date.now();
         const { imagePath, metadataPath } = await generateNFT(tokenId, 'Lemon Seed');
@@ -1055,15 +1036,43 @@ app.post('/api/mint-nft', async (req, res) => {
 
         if (!metadataFetched) throw new Error('Failed to fetch metadata from CloudFront');
 
-        const nft = await metaplex.nfts().create({
-            uri: metadataPath,
-            name: `Lemon Seed #${tokenId}`,
-            symbol: 'LSEED',
-            sellerFeeBasisPoints: 500,
-            creators: [{ address: wallet.publicKey, share: 100 }],
-            collection: null,
-            uses: null
-        });
+        const associatedTokenAccount = await splToken.getAssociatedTokenAddress(
+            mintKeypair.publicKey,
+            userPubkey,
+            false,
+            TOKEN_PROGRAM_ID,
+            splToken.ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+
+        const tokenAccountInfo = await connection.getAccountInfo(associatedTokenAccount);
+        const instructions = [];
+
+        if (!tokenAccountInfo) {
+            const createATA = splToken.createAssociatedTokenAccountInstruction(
+                userPubkey,
+                associatedTokenAccount,
+                userPubkey,
+                mintKeypair.publicKey,
+                TOKEN_PROGRAM_ID,
+                splToken.ASSOCIATED_TOKEN_PROGRAM_ID
+            );
+            instructions.push(createATA);
+        }
+
+        const mintTo = splToken.createMintToInstruction(
+            mintKeypair.publicKey,
+            associatedTokenAccount,
+            wallet.publicKey, // Mint authority
+            1,
+            [],
+            TOKEN_PROGRAM_ID
+        );
+        instructions.push(mintTo);
+
+        const tx2 = new solanaWeb3.Transaction().add(...instructions);
+        tx2.feePayer = userPubkey;
+        tx2.recentBlockhash = (await connection.getLatestBlockhash('confirmed')).blockhash;
+        tx2.partialSign(wallet);
 
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -1088,19 +1097,12 @@ app.post('/api/mint-nft', async (req, res) => {
         awardPoints(username.toLowerCase(), 'minting', 25, `Minting NFT ${mintPublicKey.slice(0, 8)}...`);
         updateQuestProgress(username.toLowerCase(), 'limited', 'launch-party', 1);
 
-        const blockhash = await connection.getLatestBlockhash();
-        tx1.recentBlockhash = blockhash.blockhash;
-        tx2.recentBlockhash = blockhash.blockhash;
-        tx1.feePayer = userPubkey;
-        tx2.feePayer = userPubkey;
-
-        // Partially sign with the required keypairs
-        tx1.partialSign(mintKeypair); // Sign with mintKeypair for SystemProgram.createAccount
-        tx2.partialSign(wallet); // Sign with wallet (mint authority) for createMintToInstruction
+        const serializedTx1 = Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex');
+        const serializedTx2 = Buffer.from(tx2.serialize({ requireAllSignatures: false })).toString('hex');
 
         res.json({
-            transaction1: Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex'),
-            transaction2: Buffer.from(tx2.serialize({ requireAllSignatures: false })).toString('hex'),
+            transaction1: serializedTx1,
+            transaction2: serializedTx2,
             mintPublicKey
         });
     } catch (error) {
