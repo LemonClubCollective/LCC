@@ -1270,8 +1270,9 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 
         upload(req, res, async (err) => {
             if (err) return res.status(500).json({ error: 'File upload failed' });
-            const profilePicUrl = `https://lemonclub-env2.us-east-1.elasticbeanstalk.com/uploads/${req.file.filename}`;
-            users[username.toLowerCase()].profilePic = profilePicUrl;
+            const baseUrl = process.env.EB_URL || 'https://lemonclubcollective.com';
+	    const profilePicUrl = `${baseUrl}/uploads/${req.file.filename}`;
+	    users[username.toLowerCase()].profilePic = profilePicUrl;
             await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
             await saveData(users, 'users');
             res.json({ success: true, profilePicUrl });
