@@ -1136,6 +1136,11 @@ async function mintNFT(button) {
         const tx2Buffer = new Uint8Array(data.transaction2.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
         console.log('[Mint] Tx2 Buffer:', tx2Buffer);
         const transaction2 = solanaWeb3.Transaction.from(tx2Buffer);
+        // Validate Tx2
+        if (!transaction2.feePayer || !transaction2.recentBlockhash) {
+            throw new Error('Tx2 is invalid: missing feePayer or recentBlockhash');
+        }
+        // Fetch a fresh blockhash for Tx2
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
         transaction2.recentBlockhash = blockhash;
         console.log('[Mint] Tx2 Deserialized:', transaction2);
@@ -1151,6 +1156,11 @@ async function mintNFT(button) {
                 attempts++;
                 console.warn(`[Mint] Tx2 signing attempt ${attempts} failed:`, signError);
                 if (attempts === maxAttempts) throw new Error('Failed to sign Tx2 after retries: ' + signError.message);
+                // Refresh blockhash on retry
+                const { blockhash: newBlockhash, lastValidBlockHeight: newLastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+                transaction2.recentBlockhash = newBlockhash;
+                lastValidBlockHeight = newLastValidBlockHeight;
+                console.log('[Mint] Refreshed blockhash for Tx2 retry:', newBlockhash);
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
@@ -1161,11 +1171,10 @@ async function mintNFT(button) {
             preflightCommitment: 'confirmed'
         });
         console.log('[Mint] Transaction 2 Signature:', signature2);
-        const blockHeight2 = await connection.getBlockHeight();
         const tx2Confirmation = await connection.confirmTransaction({
             signature: signature2,
             blockhash: transaction2.recentBlockhash,
-            lastValidBlockHeight: blockHeight2 + 150
+            lastValidBlockHeight: lastValidBlockHeight
         }, { commitment: 'confirmed', maxRetries: 10 });
         if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
         console.log('[Mint] Tx2 Confirmed');
@@ -1184,6 +1193,7 @@ async function mintNFT(button) {
         button.classList.remove('loading');
     }
 }
+
 async function stakeNFT(mintAddress) {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect wallet to stake!');
