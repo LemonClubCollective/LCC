@@ -960,11 +960,13 @@ app.post('/api/mint-nft', async (req, res) => {
         const userPubkey = new PublicKey(walletAddress);
         const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
         const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+        const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+
         const mintKeypair = Keypair.generate();
         const mintPublicKey = mintKeypair.publicKey.toBase58();
         console.log('[Mint] Mint Pubkey:', mintPublicKey);
 
-        // Transaction 1: Create and Initialize Mint
+        // Transaction 1: Create and Initialize Mint + ATA
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
         const tx1 = new Transaction().add(
             SystemProgram.createAccount({
@@ -983,7 +985,6 @@ app.post('/api/mint-nft', async (req, res) => {
             )
         );
 
-        // Transaction 2: Create ATA and Mint To
         const tokenAccount = await getAssociatedTokenAddress(
             mintKeypair.publicKey,
             userPubkey,
@@ -991,7 +992,7 @@ app.post('/api/mint-nft', async (req, res) => {
             TOKEN_PROGRAM_ID,
             ASSOCIATED_TOKEN_PROGRAM_ID
         );
-        const tx2 = new Transaction().add(
+        tx1.add(
             createAssociatedTokenAccountInstruction(
                 userPubkey,
                 tokenAccount,
@@ -1028,7 +1029,6 @@ app.post('/api/mint-nft', async (req, res) => {
         const metadataKey = `usernft/nft_${tokenId}.json`;
         let attempts = 0;
         const maxAttempts = 10;
-        let metadataAvailable = false;
         while (attempts < maxAttempts) {
             try {
                 await s3Client.send(new HeadObjectCommand({
@@ -1036,7 +1036,6 @@ app.post('/api/mint-nft', async (req, res) => {
                     Key: metadataKey
                 }));
                 console.log(`[Mint] Metadata verified in S3: ${metadataKey}`);
-                metadataAvailable = true;
                 break;
             } catch (error) {
                 console.warn(`[Mint] Metadata not yet available in S3 (attempt ${attempts + 1}/${maxAttempts}):`, error);
@@ -1045,44 +1044,57 @@ app.post('/api/mint-nft', async (req, res) => {
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }
         }
-        if (!metadataAvailable) throw new Error('Failed to verify metadata in S3');
 
-        // Verify metadata in CloudFront
-        attempts = 0;
-        let metadataFetched = false;
-        while (attempts < maxAttempts) {
-            try {
-                await axios.get(metadataPath, { responseType: 'json' });
-                console.log(`[Mint] Metadata fetched from CloudFront: ${metadataPath}`);
-                metadataFetched = true;
-                break;
-            } catch (error) {
-                console.warn(`[Mint] Failed to fetch metadata from CloudFront (attempt ${attempts + 1}/${maxAttempts}):`, error.message);
-                attempts++;
-                if (attempts === maxAttempts) throw new Error('Metadata not accessible via CloudFront after retries');
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-        }
-        if (!metadataFetched) throw new Error('Failed to fetch metadata from CloudFront');
+        // Transaction 2: Add Metadata
+        const tx2 = new Transaction();
+        const [metadataPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBytes(), mintKeypair.publicKey.toBytes()],
+            TOKEN_METADATA_PROGRAM_ID
+        );
 
-        // Create NFT with Metaplex (server-side)
-        console.log('[Mint] Creating NFT with Metaplex...');
-        let nft;
-        try {
-            nft = await metaplex.nfts().create({
-                uri: metadataPath,
-                name: `Lemon Seed #${tokenId}`,
-                symbol: 'LSEED',
-                sellerFeeBasisPoints: 500,
-                creators: [{ address: wallet.publicKey, share: 100 }],
-                collection: null,
-                uses: null
-            });
-            console.log('[Mint] NFT created:', nft);
-        } catch (error) {
-            console.error('[Mint] Metaplex NFT creation failed:', error);
-            throw new Error('Metaplex NFT creation failed: ' + error.message);
-        }
+        const name = `Lemon Seed #${tokenId}`;
+        const symbol = 'LSEED';
+        const metadataUri = metadataPath; // CloudFront URL from Lambda
+
+        const dataBuffer = Buffer.concat([
+            Buffer.from([33]), // Update metadata instruction
+            Buffer.from(Uint32Array.from([name.length]).buffer),
+            Buffer.from(name),
+            Buffer.from(Uint32Array.from([symbol.length]).buffer),
+            Buffer.from(symbol),
+            Buffer.from(Uint32Array.from([metadataUri.length]).buffer),
+            Buffer.from(metadataUri),
+            Buffer.from(Uint16Array.from([500]).buffer), // Seller fee
+            Buffer.from([0]), // No update authority
+            Buffer.from([0]), // No collection
+            Buffer.from([0]), // No uses
+            Buffer.from([1]), // 1 creator
+            Buffer.from([0])  // No verified creators
+        ]);
+
+        tx2.add(
+            new TransactionInstruction({
+                keys: [
+                    { pubkey: metadataPDA, isSigner: false, isWritable: true },
+                    { pubkey: mintKeypair.publicKey, isSigner: false, isWritable: false },
+                    { pubkey: wallet.publicKey, isSigner: true, isWritable: false },
+                    { pubkey: userPubkey, isSigner: true, isWritable: false },
+                    { pubkey: wallet.publicKey, isSigner: true, isWritable: false },
+                    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+                    { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+                ],
+                programId: TOKEN_METADATA_PROGRAM_ID,
+                data: dataBuffer,
+            })
+        );
+
+        const { blockhash } = await connection.getLatestBlockhash();
+        tx1.recentBlockhash = blockhash.blockhash;
+        tx2.recentBlockhash = blockhash.blockhash;
+        tx1.feePayer = userPubkey;
+        tx2.feePayer = userPubkey;
+        tx1.partialSign(mintKeypair, wallet);
+        tx2.partialSign(wallet);
 
         // Update user data
         const lowerUsername = username.toLowerCase();
@@ -1091,34 +1103,20 @@ app.post('/api/mint-nft', async (req, res) => {
         if (!user.nfts) user.nfts = [];
         user.nfts.push({
             mintAddress: mintPublicKey,
-            name: `Lemon Seed #${tokenId}`,
+            name: name,
             imageUri: imagePath,
             staked: false,
             stakeStart: 0,
             lastPoints: 0
         });
-        try {
-            await db.collection('users').updateOne(
-                { username: { $regex: `^${username}$`, $options: 'i' } },
-                { $set: user }
-            );
-            users[lowerUsername] = user;
-            await saveData(users, 'users');
-        } catch (error) {
-            console.error('[Mint] Failed to update user data:', error);
-            throw new Error('User data update failed: ' + error.message);
-        }
-
+        await db.collection('users').updateOne(
+            { username: { $regex: `^${username}$`, $options: 'i' } },
+            { $set: user }
+        );
+        users[lowerUsername] = user;
+        await saveData(users, 'users');
         awardPoints(lowerUsername, 'minting', 25, `Minting NFT ${mintPublicKey.slice(0, 8)}...`);
         updateQuestProgress(lowerUsername, 'limited', 'launch-party', 1);
-
-        const blockhash = await connection.getLatestBlockhash();
-        tx1.recentBlockhash = blockhash.blockhash;
-        tx2.recentBlockhash = blockhash.blockhash;
-        tx1.feePayer = userPubkey;
-        tx2.feePayer = userPubkey;
-        tx1.partialSign(mintKeypair);
-        tx2.partialSign(wallet);
 
         res.json({
             transaction1: Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex'),
@@ -1128,6 +1126,20 @@ app.post('/api/mint-nft', async (req, res) => {
     } catch (error) {
         console.error('[Mint] Error:', error);
         res.status(500).json({ error: 'Failed to prepare mint transaction', details: error.message });
+    }
+});
+
+app.get('/check-nft/:mintAddress', async (req, res) => {
+    const { mintAddress } = req.params;
+    try {
+        const mintPubkey = new PublicKey(mintAddress);
+        console.log('[CheckNFT] Checking mint:', mintAddress);
+        const metadataAccount = await metaplex.nfts().findByMint({ mintAddress: mintPubkey });
+        console.log('[CheckNFT] Metadata for', mintAddress, ':', JSON.stringify(metadataAccount, null, 2));
+        res.json(metadataAccount);
+    } catch (error) {
+        console.error('[CheckNFT] Error for', mintAddress, ':', error.message);
+        res.status(500).json({ error: error.message });
     }
 });
 
