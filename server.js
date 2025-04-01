@@ -31,7 +31,7 @@ const s3Client = new S3Client({
 });
 
 // Constants
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3001;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -392,7 +392,7 @@ async function initialize() {
     }
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 80) => {
+    const startServer = async (portToTry = process.env.PORT || 3001) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
@@ -410,7 +410,7 @@ async function initialize() {
             const fallbackPort = 8080;
 
             
-        if (!isPortFree && portToTry === (process.env.PORT || 80) && retryCount < maxRetries) {
+        if (!isPortFree && portToTry === (process.env.PORT || 3001) && retryCount < maxRetries) {
                 retryCount++;
                 console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
                 return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() => startServer(port));
@@ -1465,7 +1465,8 @@ app.get('/profile/:username', async (req, res) => {
             arcadePoints: user.arcadePoints || 0, 
             questPoints: user.questPoints || 0, 
             mintingPoints: user.mintingPoints || 0, 
-            bonusPoints: user.bonusPoints || 0 
+            bonusPoints: user.bonusPoints || 0, 
+	    isAdmin: user.isAdmin || false // Add this field
         });
     } catch (error) {
         console.error('[Profile] Error fetching profile:', error.message);
@@ -2272,9 +2273,12 @@ app.post('/admin/ban-user/:username', requireAdmin, async (req, res) => {
 app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
-        const { isAdmin, permissions } = req.body; // permissions: { canPostBlogs, canPostVideos, canDeletePosts, etc. }
-        const user = await db.collection('users').findOne({ username });
-        if (!user) return res.status(404).json({ error: 'User not found' });
+        const { isAdmin, permissions } = req.body;
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) {
+            console.log(`[AdminUpdatePermissions] User not found: ${username}`);
+            return res.status(404).json({ error: 'User not found' });
+        }
 
         const updates = {};
         if (typeof isAdmin !== 'undefined') updates.isAdmin = isAdmin;
@@ -2291,15 +2295,15 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
         }
 
         await db.collection('users').updateOne(
-            { username },
+            { username: { $regex: `^${username}$`, $options: 'i' } },
             { $set: updates }
         );
-        users[username.toLowerCase()] = { ...user, ...updates }; // Sync in-memory
+        users[username.toLowerCase()] = { ...user, ...updates };
         console.log(`[Admin] Updated permissions for ${username}:`, updates);
         res.json({ success: true });
     } catch (error) {
-        console.error('[AdminUpdatePermissions] Error:', error.message);
-        res.status(500).json({ error: 'Failed to update user permissions' });
+        console.error('[AdminUpdatePermissions] Error:', error);
+        res.status(500).json({ error: 'Failed to update user permissions: ' + error.message });
     }
 });
 
