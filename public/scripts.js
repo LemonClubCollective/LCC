@@ -1352,6 +1352,11 @@ async function uploadProfilePic() {
             body: formData,
             credentials: 'include'
         });
+	  if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${text}`);
+        }
+
         const result = await response.json();
         console.log('[Video Upload] Response:', result);
         if (response.ok && result.success) {
