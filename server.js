@@ -966,7 +966,7 @@ app.post('/api/mint-nft', async (req, res) => {
         const mintPublicKey = mintKeypair.publicKey.toBase58();
         console.log('[Mint] Mint Pubkey:', mintPublicKey);
 
-        // Transaction 1: Create and Initialize Mint + ATA
+        // Transaction 1: Create Mint + ATA
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
         const tx1 = new Transaction().add(
             SystemProgram.createAccount({
@@ -1011,66 +1011,6 @@ app.post('/api/mint-nft', async (req, res) => {
             )
         );
 
-        // Generate NFT assets
-        const tokenId = Date.now();
-        console.log('[Mint] Generating NFT for tokenId:', tokenId);
-        let imagePath, metadataPath;
-        try {
-            const result = await generateNFT(tokenId, 'Lemon Seed');
-            imagePath = result.imagePath;
-            metadataPath = result.metadataPath;
-            console.log('[Mint] Generated - Image:', imagePath, 'Metadata:', metadataPath);
-        } catch (error) {
-            console.error('[Mint] Failed to generate NFT:', error);
-            throw new Error('NFT generation failed: ' + error.message);
-        }
-
-        // Define metadata explicitly
-        const metadata = {
-            name: `Lemon Seed #${tokenId}`,
-            symbol: 'LSEED',
-            image: imagePath,
-            description: 'A Lemon Club NFT at the Seed stage',
-            attributes: [
-                { trait_type: 'Stage', value: 'Seed' },
-                { trait_type: 'Rarity', value: 'Common' }
-            ],
-            seller_fee_basis_points: 500,
-            collection: { name: 'Lemon Club Collective', family: 'LCC' }
-        };
-        const metadataKey = `usernft/nft_${tokenId}.json`;
-        await s3Client.send(new PutObjectCommand({
-            Bucket: 'lemonclub-nftgen',
-            Key: metadataKey,
-            Body: JSON.stringify(metadata, null, 2),
-            ContentType: 'application/json',
-            ACL: 'public-read'
-        }));
-        console.log('[Mint] Uploaded metadata to S3:', metadataKey);
-
-        // Verify metadata in S3
-        let attempts = 0;
-        const maxAttempts = 10;
-        while (attempts < maxAttempts) {
-            try {
-                await s3Client.send(new HeadObjectCommand({
-                    Bucket: 'lemonclub-nftgen',
-                    Key: metadataKey
-                }));
-                console.log('[Mint] Metadata verified in S3:', metadataKey);
-                break;
-            } catch (error) {
-                console.warn('[Mint] Metadata not yet available (attempt ' + (attempts + 1) + '):', error.message);
-                attempts++;
-                if (attempts === maxAttempts) throw new Error('Metadata not available in S3 after retries');
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-        }
-
-        // Use CloudFront URL for metadata
-        const metadataUri = `https://drahmlrfgetmm.cloudfront.net/${metadataKey}`;
-        console.log('[Mint] Metadata URI:', metadataUri);
-
         // Transaction 2: Add Metadata
         const tx2 = new Transaction();
         const [metadataPDA] = PublicKey.findProgramAddressSync(
@@ -1078,20 +1018,26 @@ app.post('/api/mint-nft', async (req, res) => {
             TOKEN_METADATA_PROGRAM_ID
         );
 
+        const tokenId = Date.now();
+        const name = `Lemon Seed #${tokenId}`;
+        const symbol = 'LSEED';
+        // Use a public, known-good metadata URI for testing
+        const metadataUri = 'https://arweave.net/123'; // Placeholder like the first version
+
         const dataBuffer = Buffer.concat([
-            Buffer.from([33]),
-            Buffer.from(Uint32Array.from([metadata.name.length]).buffer),
-            Buffer.from(metadata.name),
-            Buffer.from(Uint32Array.from([metadata.symbol.length]).buffer),
-            Buffer.from(metadata.symbol),
+            Buffer.from([33]), // Update metadata instruction
+            Buffer.from(Uint32Array.from([name.length]).buffer),
+            Buffer.from(name),
+            Buffer.from(Uint32Array.from([symbol.length]).buffer),
+            Buffer.from(symbol),
             Buffer.from(Uint32Array.from([metadataUri.length]).buffer),
             Buffer.from(metadataUri),
-            Buffer.from(Uint16Array.from([500]).buffer),
-            Buffer.from([0]),
-            Buffer.from([0]),
-            Buffer.from([0]),
-            Buffer.from([1]),
-            Buffer.from([0])
+            Buffer.from(Uint16Array.from([500]).buffer), // Seller fee
+            Buffer.from([0]), // No update authority
+            Buffer.from([0]), // No collection
+            Buffer.from([0]), // No uses
+            Buffer.from([1]), // 1 creator
+            Buffer.from([0])  // No verified creators
         ]);
 
         tx2.add(
@@ -1125,8 +1071,8 @@ app.post('/api/mint-nft', async (req, res) => {
         if (!user.nfts) user.nfts = [];
         user.nfts.push({
             mintAddress: mintPublicKey,
-            name: metadata.name,
-            imageUri: imagePath,
+            name: name,
+            imageUri: 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/seeds/magicseed.png', // Temp hardcoded image
             staked: false,
             stakeStart: 0,
             lastPoints: 0
