@@ -956,6 +956,7 @@ app.post('/api/mint-nft', async (req, res) => {
         }
         console.log('[Mint] Starting mint for:', username, walletAddress);
 
+        // Initialize Solana connection and constants
         const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
         const userPubkey = new PublicKey(walletAddress);
         const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
@@ -966,7 +967,7 @@ app.post('/api/mint-nft', async (req, res) => {
         const mintPublicKey = mintKeypair.publicKey.toBase58();
         console.log('[Mint] Mint Pubkey:', mintPublicKey);
 
-        // Transaction 1: Create and Initialize Mint + ATA
+        // Transaction 1: Create and Initialize Mint
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
         const tx1 = new Transaction().add(
             SystemProgram.createAccount({
@@ -979,12 +980,13 @@ app.post('/api/mint-nft', async (req, res) => {
             createInitializeMintInstruction(
                 mintKeypair.publicKey,
                 0,
-                wallet.publicKey, // Mint authority
+                wallet.publicKey, // Server wallet as mint authority
                 null,
                 TOKEN_PROGRAM_ID
             )
         );
 
+        // Add ATA and Mint To instructions to tx1
         const tokenAccount = await getAssociatedTokenAddress(
             mintKeypair.publicKey,
             userPubkey,
@@ -1009,6 +1011,13 @@ app.post('/api/mint-nft', async (req, res) => {
                 [],
                 TOKEN_PROGRAM_ID
             )
+        );
+
+        // Transaction 2: Set Metadata
+        const tx2 = new Transaction();
+        const [metadataPDA] = PublicKey.findProgramAddressSync(
+            [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBytes(), mintKeypair.publicKey.toBytes()],
+            TOKEN_METADATA_PROGRAM_ID
         );
 
         // Generate NFT assets
@@ -1045,31 +1054,41 @@ app.post('/api/mint-nft', async (req, res) => {
             }
         }
 
-        // Transaction 2: Add Metadata
-        const tx2 = new Transaction();
-        const [metadataPDA] = PublicKey.findProgramAddressSync(
-            [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBytes(), mintKeypair.publicKey.toBytes()],
-            TOKEN_METADATA_PROGRAM_ID
-        );
+        // Verify metadata accessibility via CloudFront
+        attempts = 0;
+        let metadataContent;
+        while (attempts < maxAttempts) {
+            try {
+                const response = await axios.get(metadataPath, { responseType: 'json' });
+                metadataContent = response.data;
+                console.log(`[Mint] Metadata fetched from CloudFront: ${metadataPath}`, metadataContent);
+                break;
+            } catch (error) {
+                console.warn(`[Mint] Failed to fetch metadata from CloudFront (attempt ${attempts + 1}/${maxAttempts}):`, error.message);
+                attempts++;
+                if (attempts === maxAttempts) throw new Error('Metadata not accessible via CloudFront after retries');
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+        }
 
+        // Set on-chain metadata
         const name = `Lemon Seed #${tokenId}`;
         const symbol = 'LSEED';
-        const metadataUri = metadataPath; // CloudFront URL from Lambda
-
+        const metadataUri = metadataPath;
         const dataBuffer = Buffer.concat([
-            Buffer.from([33]), // Update metadata instruction
+            Buffer.from([33]), // createMetadataAccountV3 instruction
             Buffer.from(Uint32Array.from([name.length]).buffer),
             Buffer.from(name),
             Buffer.from(Uint32Array.from([symbol.length]).buffer),
             Buffer.from(symbol),
             Buffer.from(Uint32Array.from([metadataUri.length]).buffer),
             Buffer.from(metadataUri),
-            Buffer.from(Uint16Array.from([500]).buffer), // Seller fee
+            Buffer.from(Uint16Array.from([500]).buffer), // Seller fee basis points
             Buffer.from([0]), // No update authority
             Buffer.from([0]), // No collection
             Buffer.from([0]), // No uses
-            Buffer.from([1]), // 1 creator
-            Buffer.from([0])  // No verified creators
+            Buffer.from([1]), // Is mutable
+            Buffer.from([0])  // No creators
         ]);
 
         tx2.add(
@@ -1088,36 +1107,83 @@ app.post('/api/mint-nft', async (req, res) => {
             })
         );
 
+        // Set blockhash and sign transactions
         const { blockhash } = await connection.getLatestBlockhash();
-        tx1.recentBlockhash = blockhash.blockhash;
-        tx2.recentBlockhash = blockhash.blockhash;
+        tx1.recentBlockhash = blockhash;
+        tx2.recentBlockhash = blockhash;
         tx1.feePayer = userPubkey;
         tx2.feePayer = userPubkey;
-        tx1.partialSign(mintKeypair, wallet);
+        tx1.partialSign(mintKeypair);
         tx2.partialSign(wallet);
 
-        // Update user data
+        // Database update with enhanced retry and validation
         const lowerUsername = username.toLowerCase();
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) throw new Error('User not found');
+        let user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) {
+            console.error('[Mint] User not found in database:', username);
+            throw new Error('User not found');
+        }
         if (!user.nfts) user.nfts = [];
-        user.nfts.push({
+        const nftData = {
             mintAddress: mintPublicKey,
             name: name,
             imageUri: imagePath,
             staked: false,
             stakeStart: 0,
             lastPoints: 0
-        });
-        await db.collection('users').updateOne(
-            { username: { $regex: `^${username}$`, $options: 'i' } },
-            { $set: user }
-        );
-        users[lowerUsername] = user;
-        await saveData(users, 'users');
+        };
+        user.nfts.push(nftData);
+        console.log('[Mint] Added NFT to user.nfts:', nftData);
+
+        let dbUpdateSuccess = false;
+        attempts = 0;
+        const maxDbAttempts = 5;
+        while (attempts < maxDbAttempts) {
+            try {
+                const updateResult = await db.collection('users').updateOne(
+                    { username: { $regex: `^${username}$`, $options: 'i' } },
+                    { $set: { nfts: user.nfts } }
+                );
+                console.log('[Mint] Database update result:', updateResult);
+                if (updateResult.matchedCount === 0) {
+                    throw new Error('No matching user found in database');
+                }
+                if (updateResult.modifiedCount === 0) {
+                    console.warn('[Mint] No changes made to database - possible duplicate update');
+                }
+                dbUpdateSuccess = true;
+                break;
+            } catch (error) {
+                console.error(`[Mint] Database update attempt ${attempts + 1}/${maxDbAttempts} failed:`, error.message);
+                attempts++;
+                if (attempts === maxDbAttempts) {
+                    throw new Error('Failed to update user data in database after retries');
+                }
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+
+        // Verify the update
+        if (dbUpdateSuccess) {
+            const updatedUser = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+            const nftExists = updatedUser.nfts.some(nft => nft.mintAddress === mintPublicKey);
+            if (!nftExists) {
+                console.error('[Mint] NFT not found in database after update:', mintPublicKey);
+                throw new Error('NFT not saved to database');
+            }
+            console.log('[Mint] Verified NFT in database:', updatedUser.nfts.find(nft => nft.mintAddress === mintPublicKey));
+            users[lowerUsername] = updatedUser; // Update in-memory cache
+            await saveData(users, 'users');
+            console.log('[Mint] In-memory users updated for:', lowerUsername);
+        } else {
+            throw new Error('Database update not confirmed');
+        }
+
+        // Award points and update quest progress
         awardPoints(lowerUsername, 'minting', 25, `Minting NFT ${mintPublicKey.slice(0, 8)}...`);
         updateQuestProgress(lowerUsername, 'limited', 'launch-party', 1);
 
+        // Send response
         res.json({
             transaction1: Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex'),
             transaction2: Buffer.from(tx2.serialize({ requireAllSignatures: false })).toString('hex'),
