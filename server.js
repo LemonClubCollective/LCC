@@ -1279,74 +1279,6 @@ app.post('/delete-post', async (req, res) => {
 
 app.post('/upload-profile-pic/:username', async (req, res) => {
     try {
-        const username = req.params.username.toLowerCase();
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) {
-            console.log(`[UploadProfilePic] User not found: ${username}`);
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        // Configure Multer for memory storage (we'll upload directly to S3)
-        const upload = multer({
-            storage: multer.memoryStorage(),
-            limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-            fileFilter: (req, file, cb) => {
-                if (!file.mimetype.startsWith('image/')) {
-                    return cb(new Error('Only image files are allowed'));
-                }
-                cb(null, true);
-            }
-        }).single('profilePic');
-
-        // Process the upload
-        upload(req, res, async (err) => {
-            if (err) {
-                console.error('[UploadProfilePic] Multer error:', err.message);
-                return res.status(400).json({ error: err.message });
-            }
-            if (!req.file) {
-                console.log('[UploadProfilePic] No file uploaded');
-                return res.status(400).json({ error: 'No file uploaded' });
-            }
-
-            // Upload to S3
-            const fileName = `${Date.now()}_${req.file.originalname}`;
-            const uploadParams = {
-                Bucket: 'lemonclub-userprofilepics', // Use the new bucket
-                Key: `profilepics/${fileName}`,
-                Body: req.file.buffer,
-                ContentType: req.file.mimetype,
-                ACL: 'public-read' // Ensure the file is publicly accessible
-            };
-
-            try {
-                await s3Client.send(new PutObjectCommand(uploadParams));
-                const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/profilepics/${fileName}`;
-                console.log(`[UploadProfilePic] Uploaded to S3: ${profilePicUrl}`);
-
-                // Update user in MongoDB
-                await db.collection('users').updateOne(
-                    { username: { $regex: `^${username}$`, $options: 'i' } },
-                    { $set: { profilePic: profilePicUrl } }
-                );
-                users[username].profilePic = profilePicUrl;
-                await saveData(users, 'users');
-                console.log(`[UploadProfilePic] Updated profile pic for ${username}`);
-
-                res.json({ success: true, profilePicUrl });
-            } catch (s3Error) {
-                console.error('[UploadProfilePic] S3 upload error:', s3Error.message);
-                res.status(500).json({ error: 'Failed to upload to S3', details: s3Error.message });
-            }
-        });
-    } catch (error) {
-        console.error('[UploadProfilePic] Error:', error.message);
-        res.status(500).json({ error: 'Failed to upload profile picture', details: error.message });
-    }
-});
-
-app.post('/upload-profile-pic/:username', async (req, res) => {
-    try {
         // Ensure MongoDB is connected
         if (!db) {
             console.error('[UploadProfilePic] MongoDB not initialized');
@@ -1354,6 +1286,8 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         }
 
         const username = req.params.username.toLowerCase();
+        console.log('[UploadProfilePic] Processing upload for user:', username);
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) {
             console.log(`[UploadProfilePic] User not found: ${username}`);
@@ -1365,6 +1299,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
             storage: multer.memoryStorage(),
             limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
             fileFilter: (req, file, cb) => {
+                console.log('[UploadProfilePic] File received:', file.originalname, file.mimetype);
                 if (!file.mimetype.startsWith('image/')) {
                     return cb(new Error('Only image files are allowed'));
                 }
@@ -1375,7 +1310,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         // Process the upload
         upload(req, res, async (err) => {
             if (err) {
-                console.error('[UploadProfilePic] Multer error:', err.message);
+                console.error('[UploadProfilePic] Multer error:', err.message, err.stack);
                 return res.status(400).json({ error: err.message });
             }
             if (!req.file) {
@@ -1386,22 +1321,32 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
             // Upload to S3
             const fileName = `${Date.now()}_${req.file.originalname}`;
             const uploadParams = {
-                Bucket: 'lemonclub-nftgen', // Revert to using lemonclub-nftgen
-                Key: `profilepics/${fileName}`,
+                Bucket: 'lemonclub-nftgen',
+                Key: `usernft/${fileName}`, // Use usernft/ folder
                 Body: req.file.buffer,
-                ContentType: req.file.mimetype,
-                ACL: 'public-read' // Ensure the file is publicly accessible
+                ContentType: req.file.mimetype
             };
 
             try {
-                // Test S3 permissions by listing buckets (optional, for debugging)
+                // Test S3 permissions by listing buckets
                 const listBuckets = await s3Client.send(new ListBucketsCommand({}));
                 console.log('[UploadProfilePic] S3 buckets accessible:', listBuckets.Buckets.map(b => b.Name));
 
+                // Test bucket access by listing objects in usernft/
+                const listObjects = await s3Client.send(new ListObjectsV2Command({ Bucket: 'lemonclub-nftgen', Prefix: 'usernft/' }));
+                console.log('[UploadProfilePic] Objects in usernft/ folder:', listObjects.Contents?.map(obj => obj.Key) || 'None');
+
                 // Upload the file
-                await s3Client.send(new PutObjectCommand(uploadParams));
-                const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/profilepics/${fileName}`;
+                console.log('[UploadProfilePic] Uploading to S3:', uploadParams.Key);
+                const uploadResult = await s3Client.send(new PutObjectCommand(uploadParams));
+                console.log('[UploadProfilePic] S3 upload result:', uploadResult);
+
+                const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/usernft/${fileName}`;
                 console.log(`[UploadProfilePic] Uploaded to S3: ${profilePicUrl}`);
+
+                // Test CloudFront accessibility
+                const response = await axios.get(profilePicUrl, { responseType: 'arraybuffer' });
+                console.log('[UploadProfilePic] CloudFront URL accessible:', profilePicUrl, `Size: ${response.data.length} bytes`);
 
                 // Update user in MongoDB
                 const updateResult = await db.collection('users').updateOne(
