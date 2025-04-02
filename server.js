@@ -1080,10 +1080,11 @@ app.post('/api/mint-nft', async (req, res) => {
             Buffer.from(Uint32Array.from([metadataUri.length]).buffer), // URI length
             Buffer.from(metadataUri), // URI
             Buffer.from(Uint16Array.from([500]).buffer), // Seller fee basis points (5%)
-            Buffer.from([0]), // Creators: None
-            Buffer.from([0]), // Collection: None
-            Buffer.from([0]), // Uses: None
-            Buffer.from([1]) // Is mutable: true (for evolving NFTs)
+            Buffer.from([0]), // Has creators: 0 (none)
+            Buffer.from([0]), // Has collection: 0 (none)
+            Buffer.from([0]), // Has uses: 0 (none)
+            Buffer.from([1]), // Is mutable: true
+            Buffer.from([0])  // Has collection details: 0 (none)
         ]);
 
         tx2.add(
