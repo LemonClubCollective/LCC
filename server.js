@@ -950,6 +950,7 @@ app.post('/fix-timestamps', async (req, res) => {
 app.post('/api/mint-nft', async (req, res) => {
     try {
         const { walletAddress, username } = req.body;
+        console.log('[Mint] Request received:', { walletAddress, username });
         if (!walletAddress || !username) {
             console.log('[Mint] Missing walletAddress or username');
             return res.status(400).json({ error: 'Missing required fields' });
@@ -957,6 +958,7 @@ app.post('/api/mint-nft', async (req, res) => {
         console.log('[Mint] Starting mint for:', username, walletAddress);
 
         const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
+        console.log('[Mint] Solana connection established');
         const userPubkey = new PublicKey(walletAddress);
         const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
         const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
@@ -966,8 +968,8 @@ app.post('/api/mint-nft', async (req, res) => {
         const mintPublicKey = mintKeypair.publicKey.toBase58();
         console.log('[Mint] Mint Pubkey:', mintPublicKey);
 
-        // Transaction 1: Create Mint + ATA
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
+        console.log('[Mint] Lamports fetched:', lamports);
         const tx1 = new Transaction().add(
             SystemProgram.createAccount({
                 fromPubkey: userPubkey,
@@ -992,6 +994,7 @@ app.post('/api/mint-nft', async (req, res) => {
             TOKEN_PROGRAM_ID,
             ASSOCIATED_TOKEN_PROGRAM_ID
         );
+        console.log('[Mint] Token account:', tokenAccount.toBase58());
         tx1.add(
             createAssociatedTokenAccountInstruction(
                 userPubkey,
@@ -1011,33 +1014,33 @@ app.post('/api/mint-nft', async (req, res) => {
             )
         );
 
-        // Transaction 2: Add Metadata
         const tx2 = new Transaction();
         const [metadataPDA] = PublicKey.findProgramAddressSync(
             [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBytes(), mintKeypair.publicKey.toBytes()],
             TOKEN_METADATA_PROGRAM_ID
         );
+        console.log('[Mint] Metadata PDA:', metadataPDA.toBase58());
 
         const tokenId = Date.now();
         const name = `Lemon Seed #${tokenId}`;
         const symbol = 'LSEED';
-        // Use a public, known-good metadata URI for testing
-        const metadataUri = 'https://arweave.net/123'; // Placeholder like the first version
+        const metadataUri = 'https://arweave.net/123';
+        console.log('[Mint] Metadata:', { name, symbol, metadataUri });
 
         const dataBuffer = Buffer.concat([
-            Buffer.from([33]), // Update metadata instruction
+            Buffer.from([33]),
             Buffer.from(Uint32Array.from([name.length]).buffer),
             Buffer.from(name),
             Buffer.from(Uint32Array.from([symbol.length]).buffer),
             Buffer.from(symbol),
             Buffer.from(Uint32Array.from([metadataUri.length]).buffer),
             Buffer.from(metadataUri),
-            Buffer.from(Uint16Array.from([500]).buffer), // Seller fee
-            Buffer.from([0]), // No update authority
-            Buffer.from([0]), // No collection
-            Buffer.from([0]), // No uses
-            Buffer.from([1]), // 1 creator
-            Buffer.from([0])  // No verified creators
+            Buffer.from(Uint16Array.from([500]).buffer),
+            Buffer.from([0]),
+            Buffer.from([0]),
+            Buffer.from([0]),
+            Buffer.from([1]),
+            Buffer.from([0])
         ]);
 
         tx2.add(
@@ -1057,22 +1060,24 @@ app.post('/api/mint-nft', async (req, res) => {
         );
 
         const { blockhash } = await connection.getLatestBlockhash();
+        console.log('[Mint] Blockhash:', blockhash);
         tx1.recentBlockhash = blockhash.blockhash;
         tx2.recentBlockhash = blockhash.blockhash;
         tx1.feePayer = userPubkey;
         tx2.feePayer = userPubkey;
         tx1.partialSign(mintKeypair, wallet);
         tx2.partialSign(wallet);
+        console.log('[Mint] Transactions signed');
 
-        // Update user data
         const lowerUsername = username.toLowerCase();
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        console.log('[Mint] User fetched:', user ? user.username : 'null');
         if (!user) throw new Error('User not found');
         if (!user.nfts) user.nfts = [];
         user.nfts.push({
             mintAddress: mintPublicKey,
             name: name,
-            imageUri: 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/seeds/magicseed.png', // Temp hardcoded image
+            imageUri: 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/seeds/magicseed.png',
             staked: false,
             stakeStart: 0,
             lastPoints: 0
@@ -1081,6 +1086,7 @@ app.post('/api/mint-nft', async (req, res) => {
             { username: { $regex: `^${username}$`, $options: 'i' } },
             { $set: user }
         );
+        console.log('[Mint] User updated in DB');
         users[lowerUsername] = user;
         await saveData(users, 'users');
         awardPoints(lowerUsername, 'minting', 25, `Minting NFT ${mintPublicKey.slice(0, 8)}...`);
@@ -1091,8 +1097,9 @@ app.post('/api/mint-nft', async (req, res) => {
             transaction2: Buffer.from(tx2.serialize({ requireAllSignatures: false })).toString('hex'),
             mintPublicKey
         });
+        console.log('[Mint] Response sent:', mintPublicKey);
     } catch (error) {
-        console.error('[Mint] Error:', error);
+        console.error('[Mint] Error:', error.message, error.stack);
         res.status(500).json({ error: 'Failed to prepare mint transaction', details: error.message });
     }
 });
