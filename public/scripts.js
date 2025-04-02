@@ -377,10 +377,11 @@ async function updatePostsDisplay() {
             const date = new Date(post.timestamp).toLocaleString();
             const profilePic = post.profilePic || loggedInProfilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
             const hasLikedPost = post.likedBy && post.likedBy.includes(walletAddress);
-            const safePostId = String(post._id).replace(/"/g, '"');
+            // Escape post._id to avoid breaking the string
+            const safePostId = String(post._id).replace(/"/g, '&quot;');
             html += `
                 <div class="post-card" data-post-id="${safePostId}">
-                    <img src="${profilePic}" alt="User Profile Picture" style="width: 30px; height: 30px; border-radius: 50%; vertical-align: middle;" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';">
+                    <img src="${profilePic}" alt="User Profile Picture" style="width: 30px; height: 30px; border-radius: 50%; vertical-align: middle;">
                     <strong>${post.username || 'Anonymous'}</strong> (${date})
                     <p>${post.content || 'No content'}</p>`;
             if (isAdmin) html += `<button onclick="deletePost('${safePostId}')" data-tooltip="Delete Post">Delete</button>`;
@@ -514,9 +515,9 @@ async function updateQuestsDisplay() {
     }
     const response = await fetch(`/profile/${loggedInUsername}`, {
         method: 'GET',
-        credentials: 'include'
+        credentials: 'include' // Moved inside fetch options
     });
-    const text = await response.text();
+     const text = await response.text();
     console.log('[Profile] Raw response:', response.status, text);
     const data = JSON.parse(text);
     console.log('[Profile] Fetched data:', data);
@@ -527,10 +528,10 @@ async function updateQuestsDisplay() {
         questPoints = bigInt(data.questPoints || "0");
         mintingPoints = bigInt(data.mintingPoints || "0");
         bonusPoints = bigInt(data.bonusPoints || "0");
-        loggedInProfilePic = data.profilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+        loggedInProfilePic = data.profilePic ? `${data.profilePic}` : 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
         console.log('[Profile] loggedInProfilePic set to:', loggedInProfilePic);
         let html = `
-            <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
+             <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
             <p>Username: ${loggedInUsername}</p>
             <p>Lemonade Points: ${lemonadePoints.toString()}</p>
             <p>Staking Points: ${stakingPoints.toString()}</p>
@@ -1299,36 +1300,23 @@ async function uploadProfilePic() {
         alert('Please select an image to upload!');
         return;
     }
-    console.log('[UploadProfilePic] File selected:', file.name, file.type, file.size);
-
     const formData = new FormData();
     formData.append('profilePic', file);
-    console.log('[UploadProfilePic] FormData prepared for user:', loggedInUsername);
-
-    try {
-        const response = await fetch(`/upload-profile-pic/${loggedInUsername}`, {
-            method: 'POST',
-            body: formData,
-            credentials: 'include'
-        });
-        console.log('[UploadProfilePic] Response status:', response.status);
-
-        const result = await response.json();
-        console.log('[UploadProfilePic] Response result:', result);
-
-        if (response.ok && result.success) {
-            loggedInProfilePic = result.profilePicUrl;
-            profilePicHistory.push(loggedInProfilePic);
-            document.getElementById('profile-icon').src = loggedInProfilePic;
-            fileInput.value = '';
-            updateProfileDisplay();
-            alert('Profile picture uploaded successfully!');
-        } else {
-            alert(result.error || 'Failed to upload profile picture');
-        }
-    } catch (error) {
-        console.error('[UploadProfilePic] Fetch error:', error.message, error.stack);
-        alert('Failed to upload profile picture: ' + error.message);
+    const response = await fetch(`/upload-profile-pic/${loggedInUsername}`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+    });
+    const result = await response.json();
+    if (response.ok && result.success) {
+        loggedInProfilePic = result.profilePicUrl;
+        profilePicHistory.push(loggedInProfilePic);
+        document.getElementById('profile-icon').src = loggedInProfilePic;
+        fileInput.value = '';
+        updateProfileDisplay();
+        alert('Profile picture uploaded successfully!');
+    } else {
+        alert(result.error || 'Failed to upload profile picture');
     }
 }
 
@@ -1771,3 +1759,4 @@ async function deletePost(postId) {
         alert(result.error || 'Failed to delete post');
     }
 }
+

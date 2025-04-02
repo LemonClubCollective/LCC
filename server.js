@@ -1279,113 +1279,100 @@ app.post('/delete-post', async (req, res) => {
 
 app.post('/upload-profile-pic/:username', async (req, res) => {
     try {
-        console.log('[UploadProfilePic] Request received:', req.params, req.headers);
+        const username = req.params.username;
+        if (!users[username.toLowerCase()]) return res.status(404).json({ error: 'User not found' });
 
-        // Ensure MongoDB is connected
-        if (!db) {
-            console.error('[UploadProfilePic] MongoDB not initialized');
-            return res.status(500).json({ error: 'Database not initialized' });
+        const storage = multer.diskStorage({
+            destination: path.join(__dirname, '..', 'uploads'),
+            filename: (req, file, cb) => {
+                cb(null, `${Date.now()}.jpg`);
+            }
+        });
+        const upload = multer({ storage: storage }).single('profilePic');
+
+        upload(req, res, async (err) => {
+            if (err) return res.status(500).json({ error: 'File upload failed' });
+            const baseUrl = process.env.EB_URL || 'https://lemonclubcollective.com';
+	    const profilePicUrl = `${baseUrl}/uploads/${req.file.filename}`;
+	    users[username.toLowerCase()].profilePic = profilePicUrl;
+            await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
+            await saveData(users, 'users');
+            res.json({ success: true, profilePicUrl });
+        });
+    } catch (error) {
+        console.error('[UploadProfilePic] Error:', error.message);
+        res.status(500).json({ error: 'Failed to upload profile picture' });
+    }
+});
+
+
+app.post('/upload-video', async (req, res) => {
+    try {
+        const videoDir = path.join(__dirname, 'videos');
+        if (!fs.existsSync(videoDir)) {
+            fs.mkdirSync(videoDir, { recursive: true });
+            console.log(`[VideoUpload] Created videos directory: ${videoDir}`);
+        } else {
+            console.log(`[VideoUpload] Using existing videos directory: ${videoDir}`);
         }
 
-        const username = req.params.username.toLowerCase();
-        console.log('[UploadProfilePic] Processing upload for user:', username);
-
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        console.log('[UploadProfilePic] User lookup result:', user ? `Found user: ${user.username}` : 'User not found');
+        if (!req.session || !req.session.username) {
+            return res.status(401).json({ error: 'Please log in' });
+        }
+        const user = await db.collection('users').findOne({ username: req.session.username });
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
+        if (!user.isAdmin && (!user.permissions || !user.permissions.canPostVideos)) {
+            return res.status(403).json({ error: 'Permission to post videos required' });
+        }
 
-        // Configure Multer for memory storage
+        const storage = multer.diskStorage({
+            destination: (req, file, cb) => cb(null, videoDir),
+            filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
+        });
         const upload = multer({
-            storage: multer.memoryStorage(),
-            limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-            fileFilter: (req, file, cb) => {
-                console.log('[UploadProfilePic] File received:', file ? { originalname: file.originalname, mimetype: file.mimetype } : 'No file');
-                if (!file.mimetype.startsWith('image/')) {
-                    return cb(new Error('Only image files are allowed'));
-                }
-                cb(null, true);
-            }
-        }).single('profilePic');
+            storage: storage,
+            limits: { fileSize: 1024 * 1024 * 1024 } // 1GB limit
+        }).single('video');
 
-        // Process the upload
-        console.log('[UploadProfilePic] Starting Multer upload process');
         upload(req, res, async (err) => {
             if (err) {
-                console.error('[UploadProfilePic] Multer error:', err.message, err.stack);
-                return res.status(400).json({ error: err.message });
+                console.error('[VideoUpload] Multer error:', err.message);
+                return res.status(500).json({ error: 'Video upload failed: ' + err.message });
             }
             if (!req.file) {
-                console.log('[UploadProfilePic] No file uploaded');
-                return res.status(400).json({ error: 'No file uploaded' });
+                return res.status(400).json({ error: 'No video file uploaded' });
             }
-
-            // Upload to S3
-            const fileName = `${Date.now()}_${req.file.originalname}`;
+            const { title = 'Default Title', description = 'Default Description' } = req.body;
+           const fileContent = fs.readFileSync(req.file.path);
             const uploadParams = {
-                Bucket: 'lemonclub-nftgen',
-                Key: `usernft/${fileName}`,
-                Body: req.file.buffer,
-                ContentType: req.file.mimetype
-            };
+    Bucket: 'lemonclub-videos',
+    Key: `videos/${req.file.filename}`,
+    Body: fileContent,
+    ContentType: 'video/mp4', // Explicitly set to video/mp4
+    ContentDisposition: 'inline', // Ensure it’s playable in the browser
+};
+            await s3Client.send(new PutObjectCommand(uploadParams));
 
-            try {
-                // Test S3 permissions by listing buckets
-                console.log('[UploadProfilePic] Testing S3 access with ListBuckets');
-                const listBuckets = await s3Client.send(new ListBucketsCommand({}));
-                console.log('[UploadProfilePic] S3 buckets accessible:', listBuckets.Buckets.map(b => b.Name));
+            // Delete the local file after uploading to S3
+            fs.unlinkSync(req.file.path);
 
-                // Test bucket access by listing objects in usernft/
-                console.log('[UploadProfilePic] Listing objects in usernft/ folder');
-                const listObjects = await s3Client.send(new ListObjectsV2Command({ Bucket: 'lemonclub-nftgen', Prefix: 'usernft/' }));
-                console.log('[UploadProfilePic] Objects in usernft/ folder:', listObjects.Contents?.map(obj => obj.Key) || 'None');
-
-                // Upload the file
-                console.log('[UploadProfilePic] Uploading to S3:', uploadParams.Key);
-                const uploadResult = await s3Client.send(new PutObjectCommand(uploadParams));
-                console.log('[UploadProfilePic] S3 upload result:', uploadResult);
-
-                const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/usernft/${fileName}`;
-                console.log(`[UploadProfilePic] Uploaded to S3: ${profilePicUrl}`);
-
-                // Test CloudFront accessibility
-                console.log('[UploadProfilePic] Testing CloudFront URL:', profilePicUrl);
-                try {
-                    const response = await axios.get(profilePicUrl, { responseType: 'arraybuffer' });
-                    console.log('[UploadProfilePic] CloudFront URL accessible:', profilePicUrl, `Size: ${response.data.length} bytes`);
-                } catch (cloudfrontError) {
-                    console.error('[UploadProfilePic] CloudFront URL not accessible:', cloudfrontError.message, cloudfrontError.stack);
-                    // Continue even if CloudFront fails, as the file is uploaded to S3
-                }
-
-                // Update user in MongoDB
-                console.log('[UploadProfilePic] Updating user in MongoDB:', username);
-                const updateResult = await db.collection('users').updateOne(
-                    { username: { $regex: `^${username}$`, $options: 'i' } },
-                    { $set: { profilePic: profilePicUrl } }
-                );
-                console.log('[UploadProfilePic] MongoDB update result:', updateResult);
-                if (updateResult.matchedCount === 0) {
-                    console.error('[UploadProfilePic] No user matched for update:', username);
-                    return res.status(404).json({ error: 'User not found during update' });
-                }
-                users[username].profilePic = profilePicUrl;
-                console.log('[UploadProfilePic] Saving users data');
-                await saveData(users, 'users');
-                console.log(`[UploadProfilePic] Updated profile pic for ${username}`);
-
-                res.json({ success: true, profilePicUrl });
-            } catch (s3Error) {
-                console.error('[UploadProfilePic] S3 upload error:', s3Error.message, s3Error.stack);
-                res.status(500).json({ error: 'Failed to upload to S3', details: s3Error.message });
-            }
+            // Use CloudFront URL
+            const videoUrl = `https://d18hbxl467xhey.cloudfront.net/videos/${req.file.filename}`;
+            const videoDoc = { title, description, url: videoUrl, timestamp: new Date().toISOString(), uploadedBy: req.session.username };
+            
+            await db.collection('videos').insertOne(videoDoc);
+            videos = await db.collection('videos').find().toArray();
+            console.log(`[VideoUpload] Saved to MongoDB: ${videoUrl}`);
+            res.json({ success: true, video: videoDoc });
         });
     } catch (error) {
-        console.error('[UploadProfilePic] Error:', error.message, error.stack);
-        res.status(500).json({ error: 'Failed to upload profile picture', details: error.message });
+        console.error('[VideoUpload] Error:', error.message);
+        res.status(500).json({ error: 'Failed to upload video' });
     }
 });
+
 app.post('/playtime/:username', async (req, res) => {
     try {
         const { username } = req.params;
@@ -1405,30 +1392,6 @@ app.post('/playtime/:username', async (req, res) => {
     } catch (error) {
         console.error('[Playtime] Error:', error.message);
         res.status(500).json({ error: 'Failed to update playtime' });
-    }
-});
-
-app.post('/fix-profile-pics', async (req, res) => {
-    try {
-        const usersToFix = await db.collection('users').find({
-            profilePic: { $regex: '^http://localhost:3001/uploads/' }
-        }).toArray();
-
-        for (const user of usersToFix) {
-            const newProfilePic = 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
-            await db.collection('users').updateOne(
-                { username: user.username },
-                { $set: { profilePic: newProfilePic } }
-            );
-            users[user.username.toLowerCase()].profilePic = newProfilePic;
-            console.log(`[FixProfilePics] Updated ${user.username} profilePic to ${newProfilePic}`);
-        }
-
-        await saveData(users, 'users');
-        res.json({ success: true, message: `Fixed ${usersToFix.length} users` });
-    } catch (error) {
-        console.error('[FixProfilePics] Error:', error.message);
-        res.status(500).json({ error: 'Failed to fix profile pics', details: error.message });
     }
 });
 
@@ -2417,3 +2380,4 @@ if (!isInitialized) {
         process.exit(1);
     });
 }
+
