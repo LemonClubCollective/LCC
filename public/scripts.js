@@ -377,11 +377,10 @@ async function updatePostsDisplay() {
             const date = new Date(post.timestamp).toLocaleString();
             const profilePic = post.profilePic || loggedInProfilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
             const hasLikedPost = post.likedBy && post.likedBy.includes(walletAddress);
-            // Escape post._id to avoid breaking the string
-            const safePostId = String(post._id).replace(/"/g, '&quot;');
+            const safePostId = String(post._id).replace(/"/g, '"');
             html += `
                 <div class="post-card" data-post-id="${safePostId}">
-                    <img src="${profilePic}" alt="User Profile Picture" style="width: 30px; height: 30px; border-radius: 50%; vertical-align: middle;">
+                    <img src="${profilePic}" alt="User Profile Picture" style="width: 30px; height: 30px; border-radius: 50%; vertical-align: middle;" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';">
                     <strong>${post.username || 'Anonymous'}</strong> (${date})
                     <p>${post.content || 'No content'}</p>`;
             if (isAdmin) html += `<button onclick="deletePost('${safePostId}')" data-tooltip="Delete Post">Delete</button>`;
@@ -515,9 +514,9 @@ async function updateQuestsDisplay() {
     }
     const response = await fetch(`/profile/${loggedInUsername}`, {
         method: 'GET',
-        credentials: 'include' // Moved inside fetch options
+        credentials: 'include'
     });
-     const text = await response.text();
+    const text = await response.text();
     console.log('[Profile] Raw response:', response.status, text);
     const data = JSON.parse(text);
     console.log('[Profile] Fetched data:', data);
@@ -528,10 +527,10 @@ async function updateQuestsDisplay() {
         questPoints = bigInt(data.questPoints || "0");
         mintingPoints = bigInt(data.mintingPoints || "0");
         bonusPoints = bigInt(data.bonusPoints || "0");
-        loggedInProfilePic = data.profilePic ? `${data.profilePic}` : 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+        loggedInProfilePic = data.profilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
         console.log('[Profile] loggedInProfilePic set to:', loggedInProfilePic);
         let html = `
-             <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
+            <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
             <p>Username: ${loggedInUsername}</p>
             <p>Lemonade Points: ${lemonadePoints.toString()}</p>
             <p>Staking Points: ${stakingPoints.toString()}</p>
