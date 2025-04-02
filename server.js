@@ -1279,6 +1279,8 @@ app.post('/delete-post', async (req, res) => {
 
 app.post('/upload-profile-pic/:username', async (req, res) => {
     try {
+        console.log('[UploadProfilePic] Request received:', req.params, req.headers);
+
         // Ensure MongoDB is connected
         if (!db) {
             console.error('[UploadProfilePic] MongoDB not initialized');
@@ -1289,8 +1291,8 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         console.log('[UploadProfilePic] Processing upload for user:', username);
 
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        console.log('[UploadProfilePic] User lookup result:', user ? `Found user: ${user.username}` : 'User not found');
         if (!user) {
-            console.log(`[UploadProfilePic] User not found: ${username}`);
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -1299,7 +1301,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
             storage: multer.memoryStorage(),
             limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
             fileFilter: (req, file, cb) => {
-                console.log('[UploadProfilePic] File received:', file.originalname, file.mimetype);
+                console.log('[UploadProfilePic] File received:', file ? { originalname: file.originalname, mimetype: file.mimetype } : 'No file');
                 if (!file.mimetype.startsWith('image/')) {
                     return cb(new Error('Only image files are allowed'));
                 }
@@ -1308,6 +1310,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         }).single('profilePic');
 
         // Process the upload
+        console.log('[UploadProfilePic] Starting Multer upload process');
         upload(req, res, async (err) => {
             if (err) {
                 console.error('[UploadProfilePic] Multer error:', err.message, err.stack);
@@ -1322,17 +1325,19 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
             const fileName = `${Date.now()}_${req.file.originalname}`;
             const uploadParams = {
                 Bucket: 'lemonclub-nftgen',
-                Key: `usernft/${fileName}`, // Use usernft/ folder
+                Key: `usernft/${fileName}`,
                 Body: req.file.buffer,
                 ContentType: req.file.mimetype
             };
 
             try {
                 // Test S3 permissions by listing buckets
+                console.log('[UploadProfilePic] Testing S3 access with ListBuckets');
                 const listBuckets = await s3Client.send(new ListBucketsCommand({}));
                 console.log('[UploadProfilePic] S3 buckets accessible:', listBuckets.Buckets.map(b => b.Name));
 
                 // Test bucket access by listing objects in usernft/
+                console.log('[UploadProfilePic] Listing objects in usernft/ folder');
                 const listObjects = await s3Client.send(new ListObjectsV2Command({ Bucket: 'lemonclub-nftgen', Prefix: 'usernft/' }));
                 console.log('[UploadProfilePic] Objects in usernft/ folder:', listObjects.Contents?.map(obj => obj.Key) || 'None');
 
@@ -1345,19 +1350,28 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
                 console.log(`[UploadProfilePic] Uploaded to S3: ${profilePicUrl}`);
 
                 // Test CloudFront accessibility
-                const response = await axios.get(profilePicUrl, { responseType: 'arraybuffer' });
-                console.log('[UploadProfilePic] CloudFront URL accessible:', profilePicUrl, `Size: ${response.data.length} bytes`);
+                console.log('[UploadProfilePic] Testing CloudFront URL:', profilePicUrl);
+                try {
+                    const response = await axios.get(profilePicUrl, { responseType: 'arraybuffer' });
+                    console.log('[UploadProfilePic] CloudFront URL accessible:', profilePicUrl, `Size: ${response.data.length} bytes`);
+                } catch (cloudfrontError) {
+                    console.error('[UploadProfilePic] CloudFront URL not accessible:', cloudfrontError.message, cloudfrontError.stack);
+                    // Continue even if CloudFront fails, as the file is uploaded to S3
+                }
 
                 // Update user in MongoDB
+                console.log('[UploadProfilePic] Updating user in MongoDB:', username);
                 const updateResult = await db.collection('users').updateOne(
                     { username: { $regex: `^${username}$`, $options: 'i' } },
                     { $set: { profilePic: profilePicUrl } }
                 );
+                console.log('[UploadProfilePic] MongoDB update result:', updateResult);
                 if (updateResult.matchedCount === 0) {
                     console.error('[UploadProfilePic] No user matched for update:', username);
                     return res.status(404).json({ error: 'User not found during update' });
                 }
                 users[username].profilePic = profilePicUrl;
+                console.log('[UploadProfilePic] Saving users data');
                 await saveData(users, 'users');
                 console.log(`[UploadProfilePic] Updated profile pic for ${username}`);
 
@@ -1372,7 +1386,6 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to upload profile picture', details: error.message });
     }
 });
-
 app.post('/playtime/:username', async (req, res) => {
     try {
         const { username } = req.params;

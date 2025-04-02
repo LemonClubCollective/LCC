@@ -1299,23 +1299,36 @@ async function uploadProfilePic() {
         alert('Please select an image to upload!');
         return;
     }
+    console.log('[UploadProfilePic] File selected:', file.name, file.type, file.size);
+
     const formData = new FormData();
     formData.append('profilePic', file);
-    const response = await fetch(`/upload-profile-pic/${loggedInUsername}`, {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-        loggedInProfilePic = result.profilePicUrl;
-        profilePicHistory.push(loggedInProfilePic);
-        document.getElementById('profile-icon').src = loggedInProfilePic;
-        fileInput.value = '';
-        updateProfileDisplay();
-        alert('Profile picture uploaded successfully!');
-    } else {
-        alert(result.error || 'Failed to upload profile picture');
+    console.log('[UploadProfilePic] FormData prepared for user:', loggedInUsername);
+
+    try {
+        const response = await fetch(`/upload-profile-pic/${loggedInUsername}`, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'
+        });
+        console.log('[UploadProfilePic] Response status:', response.status);
+
+        const result = await response.json();
+        console.log('[UploadProfilePic] Response result:', result);
+
+        if (response.ok && result.success) {
+            loggedInProfilePic = result.profilePicUrl;
+            profilePicHistory.push(loggedInProfilePic);
+            document.getElementById('profile-icon').src = loggedInProfilePic;
+            fileInput.value = '';
+            updateProfileDisplay();
+            alert('Profile picture uploaded successfully!');
+        } else {
+            alert(result.error || 'Failed to upload profile picture');
+        }
+    } catch (error) {
+        console.error('[UploadProfilePic] Fetch error:', error.message, error.stack);
+        alert('Failed to upload profile picture: ' + error.message);
     }
 }
 
