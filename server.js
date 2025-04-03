@@ -1283,7 +1283,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         if (!users[username.toLowerCase()]) return res.status(404).json({ error: 'User not found' });
 
         const storage = multer.diskStorage({
-            destination: path.join(__dirname, '..', 'uploads'),
+            destination: path.join(__dirname, 'public', 'uploads'),
             filename: (req, file, cb) => {
                 cb(null, `${Date.now()}.jpg`);
             }
@@ -1293,8 +1293,8 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         upload(req, res, async (err) => {
             if (err) return res.status(500).json({ error: 'File upload failed' });
             const baseUrl = process.env.EB_URL || 'https://lemonclubcollective.com';
-	    const profilePicUrl = `${baseUrl}/uploads/${req.file.filename}`;
-	    users[username.toLowerCase()].profilePic = profilePicUrl;
+            const profilePicUrl = `${baseUrl}/uploads/${req.file.filename}`;
+            users[username.toLowerCase()].profilePic = profilePicUrl;
             await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
             await saveData(users, 'users');
             res.json({ success: true, profilePicUrl });
