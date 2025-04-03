@@ -316,9 +316,6 @@ async function loadWallet() {
 }
 
 
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
-
-
 let isInitialized = false; // Guard to prevent multiple calls
 
 
@@ -1382,24 +1379,32 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         const username = req.params.username;
         if (!users[username.toLowerCase()]) return res.status(404).json({ error: 'User not found' });
 
-
-        const storage = multer.diskStorage({
-            destination: path.join(__dirname, '..', 'uploads'),
-            filename: (req, file, cb) => {
-                cb(null, `${Date.now()}.jpg`);
-            }
-        });
-        const upload = multer({ storage: storage }).single('profilePic');
-
+        const upload = multer({ storage: multer.memoryStorage() }).single('profilePic');
 
         upload(req, res, async (err) => {
             if (err) return res.status(500).json({ error: 'File upload failed' });
-            const baseUrl = process.env.EB_URL || 'https://www.lemonclubcollective.com';
-            const profilePicUrl = `${baseUrl}/uploads/${req.file.filename}`;
-            users[username.toLowerCase()].profilePic = profilePicUrl;
-            await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
-            await saveData(users, 'users');
-            res.json({ success: true, profilePicUrl });
+            if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+            const filename = `${Date.now()}.jpg`;
+            const uploadParams = {
+                Bucket: 'lemonclub-nftgen',
+                Key: `assetsNFTmain/profilepics/${filename}`,
+                Body: req.file.buffer,
+                ContentType: 'image/jpeg',
+                ACL: 'public-read'
+            };
+
+            try {
+                await s3Client.send(new PutObjectCommand(uploadParams));
+                const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
+                users[username.toLowerCase()].profilePic = profilePicUrl;
+                await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
+                await saveData(users, 'users');
+                res.json({ success: true, profilePicUrl });
+            } catch (s3Error) {
+                console.error('[UploadProfilePic] S3 Error:', s3Error.message);
+                res.status(500).json({ error: 'Failed to upload to S3' });
+            }
         });
     } catch (error) {
         console.error('[UploadProfilePic] Error:', error.message);

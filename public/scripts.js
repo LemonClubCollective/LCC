@@ -155,15 +155,32 @@ function updateAuthButton() {
             document.getElementById('auth-btn').textContent = loggedInUsername ? 'Logout' : 'Login';
         }
 
-
 function updateProfileIcon() {
     const profileIcon = document.getElementById('profile-icon');
-    if (profileIcon) {
-        profileIcon.src = loggedInProfilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
-        console.log('[ProfileIcon] Updated to:', profileIcon.src);
-    } else {
+    if (!profileIcon) {
         console.error('[ProfileIcon] Element not found');
+        return;
     }
+
+    const defaultProfilePic = 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+    let profilePicUrl = loggedInProfilePic || defaultProfilePic;
+
+    // If it's a user-uploaded pic (not the default), ensure the correct CloudFront path
+    if (profilePicUrl !== defaultProfilePic) {
+        const filename = profilePicUrl.split('/').pop();
+        profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
+    }
+
+    const img = new Image();
+    img.onerror = () => {
+        console.warn('[ProfileIcon] Failed to load profile image, using default:', profilePicUrl);
+        profileIcon.src = defaultProfilePic;
+    };
+    img.onload = () => {
+        profileIcon.src = profilePicUrl;
+        console.log('[ProfileIcon] Successfully loaded:', profilePicUrl);
+    };
+    img.src = profilePicUrl;
 }
 
 
@@ -543,9 +560,9 @@ async function updateQuestsDisplay() {
     }
     const response = await fetch(`/profile/${loggedInUsername}`, {
         method: 'GET',
-        credentials: 'include' // Moved inside fetch options
+        credentials: 'include'
     });
-     const text = await response.text();
+    const text = await response.text();
     console.log('[Profile] Raw response:', response.status, text);
     const data = JSON.parse(text);
     console.log('[Profile] Fetched data:', data);
@@ -559,7 +576,7 @@ async function updateQuestsDisplay() {
         loggedInProfilePic = data.profilePic ? `${data.profilePic}` : 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
         console.log('[Profile] loggedInProfilePic set to:', loggedInProfilePic);
         let html = `
-             <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
+            <img id="profile-pic-display" src="${loggedInProfilePic}" alt="Your Profile Picture" onerror="this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png'; console.log('Profile pic failed:', '${loggedInProfilePic}')">
             <p>Username: ${loggedInUsername}</p>
             <p>Lemonade Points: ${lemonadePoints.toString()}</p>
             <p>Staking Points: ${stakingPoints.toString()}</p>
@@ -570,13 +587,11 @@ async function updateQuestsDisplay() {
         `;
         document.getElementById('profile-info').innerHTML = html;
 
-
         let optionsHtml = '<h3>Choose a Profile Pic</h3>';
         profilePics.forEach((pic, index) => {
             optionsHtml += `<img id="profile-pic-option-${index}" class="profile-pic-option ${pic === loggedInProfilePic ? 'selected' : ''}" onclick="selectProfilePic('${pic}')" src="${pic}" alt="Profile Pic Option ${index + 1}">`;
         });
         document.getElementById('profile-pic-options').innerHTML = optionsHtml;
-
 
         let historyHtml = '';
         if (profilePicHistory.length > 0) {
