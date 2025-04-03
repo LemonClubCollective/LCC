@@ -152,7 +152,7 @@ function updateProfileIcon() {
     }
 
     const defaultProfilePic = 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
-    const profilePicUrl = loggedInProfilePic || defaultProfilePic;
+    let profilePicUrl = loggedInProfilePic || defaultProfilePic;
 
     const img = new Image();
     img.onerror = () => {
