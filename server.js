@@ -1377,15 +1377,26 @@ app.post('/delete-post', async (req, res) => {
 app.post('/upload-profile-pic/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        if (!users[username.toLowerCase()]) return res.status(404).json({ error: 'User not found' });
+        console.log('[UploadProfilePic] Starting upload for user:', username);
+        if (!users[username.toLowerCase()]) {
+            console.log('[UploadProfilePic] User not found:', username);
+            return res.status(404).json({ error: 'User not found' });
+        }
 
         const upload = multer({ storage: multer.memoryStorage() }).single('profilePic');
 
         upload(req, res, async (err) => {
-            if (err) return res.status(500).json({ error: 'File upload failed' });
-            if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+            if (err) {
+                console.error('[UploadProfilePic] Multer error:', err.message);
+                return res.status(500).json({ error: 'File upload failed', details: err.message });
+            }
+            if (!req.file) {
+                console.log('[UploadProfilePic] No file uploaded');
+                return res.status(400).json({ error: 'No file uploaded' });
+            }
 
             const filename = `${Date.now()}.jpg`;
+            console.log('[UploadProfilePic] Uploading to S3:', filename);
             const uploadParams = {
                 Bucket: 'lemonclub-nftgen',
                 Key: `assetsNFTmain/profilepics/${filename}`,
@@ -1396,19 +1407,20 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 
             try {
                 await s3Client.send(new PutObjectCommand(uploadParams));
+                console.log('[UploadProfilePic] Successfully uploaded to S3:', filename);
                 const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
                 users[username.toLowerCase()].profilePic = profilePicUrl;
                 await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
                 await saveData(users, 'users');
                 res.json({ success: true, profilePicUrl });
             } catch (s3Error) {
-                console.error('[UploadProfilePic] S3 Error:', s3Error.message);
-                res.status(500).json({ error: 'Failed to upload to S3' });
+                console.error('[UploadProfilePic] S3 Error:', s3Error.message, s3Error.stack);
+                res.status(500).json({ error: 'Failed to upload to S3', details: s3Error.message });
             }
         });
     } catch (error) {
-        console.error('[UploadProfilePic] Error:', error.message);
-        res.status(500).json({ error: 'Failed to upload profile picture' });
+        console.error('[UploadProfilePic] General Error:', error.message, error.stack);
+        res.status(500).json({ error: 'Failed to upload profile picture', details: error.message });
     }
 });
 
