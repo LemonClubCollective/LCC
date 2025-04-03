@@ -1164,7 +1164,7 @@ async function mintNFT(button) {
         const data = await response.json();
         console.log('[Mint] Full Server Response:', data);
         console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
-        const imageUri = `https://www.lemonclubcollective.com/output/nft_${Date.now()}.png`;
+        const imageUri = `https://drahmlrfgetmm.cloudfront.net/usernft/nft_${Date.now()}.png`;
 
 
         console.log('[Mint] Signing Tx1 with Phantom...');
