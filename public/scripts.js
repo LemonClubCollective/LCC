@@ -165,7 +165,6 @@ function updateProfileIcon() {
     const defaultProfilePic = 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
     let profilePicUrl = loggedInProfilePic || defaultProfilePic;
 
-    // If it's a user-uploaded pic (not the default), ensure the correct CloudFront path
     if (profilePicUrl !== defaultProfilePic) {
         const filename = profilePicUrl.split('/').pop();
         profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
@@ -551,7 +550,7 @@ async function updateQuestsDisplay() {
 }
 
 
- async function updateProfileDisplay() {
+async function updateProfileDisplay() {
     if (!loggedInUsername) {
         document.getElementById('profile-info').innerHTML = '<p>Please login to view your profile!</p>';
         document.getElementById('profile-pic-options').innerHTML = '';
@@ -1389,7 +1388,7 @@ async function uploadProfilePic() {
     }
     const formData = new FormData();
     formData.append('profilePic', file);
-        const response = await fetch(`${apiBaseUrl}/upload-profile-pic/${loggedInUsername}`, {
+        const response = await fetch(`/upload-profile-pic/${loggedInUsername}`, {
         method: 'POST',
         body: formData,
         credentials: 'include'
