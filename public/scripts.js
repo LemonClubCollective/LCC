@@ -146,12 +146,23 @@ function updateAuthButton() {
 
 function updateProfileIcon() {
     const profileIcon = document.getElementById('profile-icon');
-    if (profileIcon) {
-        profileIcon.src = loggedInProfilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
-        console.log('[ProfileIcon] Updated to:', profileIcon.src);
-    } else {
+    if (!profileIcon) {
         console.error('[ProfileIcon] Element not found');
+        return;
     }
+
+    const defaultProfilePic = 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+    const profilePicUrl = loggedInProfilePic || defaultProfilePic;
+
+    const img = new Image();
+    img.onerror = () => {
+        console.warn('[ProfileIcon] Failed to load profile image, using default');
+        profileIcon.src = defaultProfilePic;
+    };
+    img.onload = () => {
+        profileIcon.src = profilePicUrl;
+    };
+    img.src = profilePicUrl;
 }
 
 async function login() {
