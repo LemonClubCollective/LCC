@@ -145,38 +145,15 @@ function updateAuthButton() {
         }
 
 function updateProfileIcon() {
-    const profileIcon = document.getElementById('profile-icon');
-    if (!profileIcon) {
-        console.error('[ProfileIcon] Element not found');
-        return;
-    }
-
-    const defaultProfilePic = 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
-    let profilePicUrl;
-    
-    if (loggedInProfilePic) {
-        // If it's already a full CloudFront URL, use it directly
-        if (loggedInProfilePic.startsWith('https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/')) {
-            profilePicUrl = loggedInProfilePic;
-        } else {
-            // Extract just the filename if it's a full URL, or use the string directly if it's just a filename
-            const filename = loggedInProfilePic.split('/').pop();
-            profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
+            const profileIcon = document.getElementById('profile-icon');
+            if (profileIcon) {
+                profileIcon.src = loggedInProfilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+                console.log('[ProfileIcon] Updated to:', profileIcon.src);
+            } else {
+                console.error('[ProfileIcon] Element not found');
+            }
         }
-    } else {
-        profilePicUrl = defaultProfilePic;
-    }
-
-    const img = new Image();
-    img.onerror = () => {
-        console.warn('[ProfileIcon] Failed to load profile image, using default');
-        profileIcon.src = defaultProfilePic;
-    };
-    img.onload = () => {
-        profileIcon.src = profilePicUrl;
-    };
-    img.src = profilePicUrl;
-}
+        
 
 async function login() {
     console.log('[Login] Login button clicked');

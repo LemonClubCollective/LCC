@@ -1282,46 +1282,24 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
         const username = req.params.username;
         if (!users[username.toLowerCase()]) return res.status(404).json({ error: 'User not found' });
 
-        // Use memory storage since we'll upload directly to S3
-        const upload = multer({ storage: multer.memoryStorage() }).single('profilePic');
+
+        const storage = multer.diskStorage({
+            destination: path.join(__dirname, '..', 'uploads'),
+            filename: (req, file, cb) => {
+                cb(null, `${Date.now()}.jpg`);
+            }
+        });
+        const upload = multer({ storage: storage }).single('profilePic');
+
 
         upload(req, res, async (err) => {
             if (err) return res.status(500).json({ error: 'File upload failed' });
-            if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-
-            const filename = `${Date.now()}.jpg`;
-            const uploadParams = {
-                Bucket: 'lemonclub-nftgen',
-                Key: `assetsNFTmain/profilepics/${filename}`,
-                Body: req.file.buffer,
-                ContentType: 'image/jpeg',
-                ACL: 'public-read' // Make the file publicly accessible
-            };
-
-            try {
-                // Add 10 second timeout to S3 upload
-                const uploadPromise = s3Client.send(new PutObjectCommand(uploadParams));
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('S3 upload timed out after 10 seconds')), 10000)
-                );
-
-                await Promise.race([uploadPromise, timeoutPromise]);
-                
-                const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
-                users[username.toLowerCase()].profilePic = profilePicUrl;
-                await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
-                await saveData(users, 'users');
-                res.json({ success: true, profilePicUrl });
-            } catch (s3Error) {
-                console.error('[UploadProfilePic] S3 Error:', {
-                    message: s3Error.message,
-                    code: s3Error.code,
-                    statusCode: s3Error.$metadata?.httpStatusCode,
-                    requestId: s3Error.$metadata?.requestId,
-                    time: new Date().toISOString()
-                });
-                res.status(500).json({ error: 'Failed to upload to S3' });
-            }
+            const baseUrl = process.env.EB_URL || 'https://lemonclubcollective.com';
+            const profilePicUrl = `${baseUrl}/uploads/${req.file.filename}`;
+            users[username.toLowerCase()].profilePic = profilePicUrl;
+            await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
+            await saveData(users, 'users');
+            res.json({ success: true, profilePicUrl });
         });
     } catch (error) {
         console.error('[UploadProfilePic] Error:', error.message);
