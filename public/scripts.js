@@ -23,6 +23,7 @@ let lastLogin = null;
             'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP10.png'
         ];
 
+
 if (!window.Buffer) {
     window.Buffer = function Buffer(arg) {
         if (typeof arg === 'string') {
@@ -49,6 +50,7 @@ if (!window.Buffer) {
     console.log('Inline Buffer polyfill loaded');
 }
 
+
 // Debug templating issues
 window.addEventListener('error', (event) => {
     if (event && event.message && typeof event.message === 'string' && event.message.includes('404')) {
@@ -58,12 +60,14 @@ window.addEventListener('error', (event) => {
     }
 }, true);
 
+
 console.log('[Script] Checking for mintNFT overrides...');
 if (typeof window.mintNFT !== 'undefined') console.log('[Script] WARNING: mintNFT already defined!');
 console.log('Debug script executed before Solana Web3 load');
 
-	const port = 8080;         
-	const gameTimers = {};
+
+        const port = 8080;         
+        const gameTimers = {};
         let startTime = null;
         let profilePicHistory = [];
         let lastScrollTop = 0;
@@ -86,6 +90,7 @@ console.log('Debug script executed before Solana Web3 load');
                 roadmapImg.onload = () => console.log('Roadmap image loaded successfully:', roadmapImg.src);
             }
 
+
             // Set up scroll event for header
             window.addEventListener('scroll', function() {
                 const header = document.querySelector('.header');
@@ -94,6 +99,7 @@ console.log('Debug script executed before Solana Web3 load');
                 else header.classList.remove('header-hidden');
                 lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
             });
+
 
             // Initialize UI elements
             document.getElementById('splash-page').style.display = 'block';
@@ -104,12 +110,14 @@ console.log('Debug script executed before Solana Web3 load');
             updateQuestsDisplay();
             updatePointsDisplay();
 
+
             // Set up registration button logic
             const regTos = document.getElementById('regTos');
             const regRisk = document.getElementById('regRisk');
             if (regTos) regTos.addEventListener('change', updateRegisterButton);
             if (regRisk) regRisk.addEventListener('change', updateRegisterButton);
 });
+
 
 function initBigIntegerVars() {
             if (typeof BigInteger === 'undefined') {
@@ -125,11 +133,13 @@ function initBigIntegerVars() {
             console.log('BigInteger variables initialized');
         }
 
+
         if (typeof BigInteger !== 'undefined') {
             initBigIntegerVars();
         } else {
             console.error('BigInteger not loaded yet—waiting...');
         }
+
 
 function stopAllGameTimers() {
     // Access gameTimers from the global scope (defined in index.html)
@@ -140,20 +150,22 @@ function stopAllGameTimers() {
     console.log('All game timers stopped');
  }
 
+
 function updateAuthButton() {
             document.getElementById('auth-btn').textContent = loggedInUsername ? 'Logout' : 'Login';
         }
 
+
 function updateProfileIcon() {
-            const profileIcon = document.getElementById('profile-icon');
-            if (profileIcon) {
-                profileIcon.src = loggedInProfilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
-                console.log('[ProfileIcon] Updated to:', profileIcon.src);
-            } else {
-                console.error('[ProfileIcon] Element not found');
-            }
-        }
-        
+    const profileIcon = document.getElementById('profile-icon');
+    if (profileIcon) {
+        profileIcon.src = loggedInProfilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+        console.log('[ProfileIcon] Updated to:', profileIcon.src);
+    } else {
+        console.error('[ProfileIcon] Element not found');
+    }
+}
+
 
 async function login() {
     console.log('[Login] Login button clicked');
@@ -193,7 +205,7 @@ async function login() {
             await updateProfileDisplay();
             alert('Login successful!');
             trackLoginStreak();
-	    await updateQuestProgressClient('section-adventurer', 'daily', 1);
+            await updateQuestProgressClient('section-adventurer', 'daily', 1);
         } else {
             alert(result.error || 'Login failed');
         }
@@ -202,6 +214,7 @@ async function login() {
         alert('Login failed: ' + error.message);
     }
 }
+
 
 function logout() {
     loggedInUsername = null;
@@ -220,7 +233,8 @@ function logout() {
     document.getElementById('login-status').textContent = 'Not logged in';
     showContent('home');
     alert('Logged out successfully!');
-	 }
+         }
+
 
 async function register() {
     console.log('[Register] Register button clicked');
@@ -253,6 +267,7 @@ async function register() {
     }
 }
 
+
 function updateRegisterButton() {
     const tosChecked = document.getElementById('regTos')?.checked || false;
     const riskChecked = document.getElementById('regRisk')?.checked || false;
@@ -263,6 +278,7 @@ function updateRegisterButton() {
         console.warn('[UpdateRegisterButton] #join-btn not found');
     }
 }
+
 
 document.addEventListener('DOMContentLoaded', () => {
     const regTos = document.getElementById('regTos');
@@ -277,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+
 function disconnectWallet() {
     if (window.solana && window.solana.isPhantom) {
         window.solana.disconnect();
@@ -284,6 +301,7 @@ function disconnectWallet() {
     }
     document.getElementById('wallet-status').textContent = 'Wallet not connected';
  }
+
 
 async function loadProducts() {
     const response = await fetch('https://lemonclub-env2.us-east-1.elasticbeanstalk.com/api/printify-products', {
@@ -301,6 +319,7 @@ async function loadProducts() {
         });
         document.getElementById('product-list').innerHTML = html;
 
+
         data.data.forEach(product => {
             const img = document.getElementById(`product-img-${product.id}`);
             if (product.images && product.images[0] && product.images[0].src) {
@@ -313,6 +332,7 @@ async function loadProducts() {
         document.getElementById('product-list').innerHTML = `<p>${data.message || 'No products available yet'}</p>`;
     }
 }
+
 
   async function updateNFTDisplay(containerId, showButtons = true) {
     if (!loggedInUsername) {
@@ -364,6 +384,7 @@ async function loadProducts() {
     }
 }
 
+
 async function updatePostsDisplay() {
     const response = await fetch('/posts', {
         method: 'GET',
@@ -411,6 +432,7 @@ async function updatePostsDisplay() {
     }
 }
 
+
 async function updateQuestsDisplay() {
     console.log('[Quests] Updating quest display');
     if (!loggedInUsername) {
@@ -419,6 +441,7 @@ async function updateQuestsDisplay() {
         document.getElementById('limited-quests').innerHTML = '<h3>Limited-Time Quests</h3><p>Login to see quests!</p>';
         return;
     }
+
 
     const response = await fetch(`/api/quests/${loggedInUsername}`, {
         method: 'GET',
@@ -430,6 +453,7 @@ async function updateQuestsDisplay() {
     console.log('[Quests] Server response:', data);
     if (response.ok && data.success) {
         const { daily = [], weekly = [], limited = [] } = data.quests || {};
+
 
         let dailyHtml = '<h3>Daily Quests</h3>';
         if (daily.length > 0) {
@@ -454,6 +478,7 @@ async function updateQuestsDisplay() {
         }
         document.getElementById('daily-quests').innerHTML = dailyHtml;
 
+
         let weeklyHtml = '<h3>Weekly Quests</h3>';
         if (weekly.length > 0) {
             console.log('[Quests] Rendering weekly quests:', weekly);
@@ -476,6 +501,7 @@ async function updateQuestsDisplay() {
             weeklyHtml += '<p>Loading weekly quests...</p>';
         }
         document.getElementById('weekly-quests').innerHTML = weeklyHtml;
+
 
         let limitedHtml = '<h3>Limited-Time Quests</h3>';
         if (limited.length > 0) {
@@ -506,6 +532,7 @@ async function updateQuestsDisplay() {
         document.getElementById('limited-quests').innerHTML = '<h3>Limited-Time Quests</h3><p>Error loading—try again!</p>';
     }
 }
+
 
  async function updateProfileDisplay() {
     if (!loggedInUsername) {
@@ -543,11 +570,13 @@ async function updateQuestsDisplay() {
         `;
         document.getElementById('profile-info').innerHTML = html;
 
+
         let optionsHtml = '<h3>Choose a Profile Pic</h3>';
         profilePics.forEach((pic, index) => {
             optionsHtml += `<img id="profile-pic-option-${index}" class="profile-pic-option ${pic === loggedInProfilePic ? 'selected' : ''}" onclick="selectProfilePic('${pic}')" src="${pic}" alt="Profile Pic Option ${index + 1}">`;
         });
         document.getElementById('profile-pic-options').innerHTML = optionsHtml;
+
 
         let historyHtml = '';
         if (profilePicHistory.length > 0) {
@@ -565,6 +594,7 @@ async function updateQuestsDisplay() {
         console.error('[Profile] Error:', data.error || response.statusText);
     }
 }
+
 
 async function updateBlogPosts() {
     const response = await fetch('/blog-posts', {
@@ -589,6 +619,7 @@ async function updateBlogPosts() {
         document.getElementById('blog-posts').innerHTML = '<p>No blog posts yet!</p>';
     }
 }
+
 
 async function updateVideoList() {
     const response = await fetch(`/videos`, {
@@ -617,6 +648,7 @@ async function updateVideoList() {
     }
 }
 
+
 async function selectProfilePic(picUrl) {
     if (!loggedInUsername) {
         alert('Please login to change your profile picture!');
@@ -639,9 +671,11 @@ async function selectProfilePic(picUrl) {
     }
 }
 
+
         function countTotalComments(comments) {
             return comments ? comments.length : 0;
         }
+
 
         function renderComments(comments, postId, parentId = null, depth = 0) {
             const commentSection = document.getElementById(`comment-section-${postId}`);
@@ -679,7 +713,7 @@ async function selectProfilePic(picUrl) {
             }
             return html;
         }
-	
+        
        async function submitPost() {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect wallet to post!');
@@ -716,6 +750,7 @@ async function selectProfilePic(picUrl) {
         postButton.disabled = false;
     }
 }
+
 
         async function submitComment(postId, parentId) {
     if (!loggedInUsername || !walletAddress) {
@@ -766,6 +801,7 @@ async function selectProfilePic(picUrl) {
     }
 }
 
+
 async function likePost(postId) {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect your Solana wallet to like posts!');
@@ -796,6 +832,7 @@ async function likePost(postId) {
         likeButton.disabled = false;
     }
 }
+
 
 async function likeComment(postId, commentId) {
     if (!loggedInUsername || !walletAddress) {
@@ -829,6 +866,7 @@ async function likeComment(postId, commentId) {
     }
 }
 
+
 async function deleteComment(postId, commentId) {
     if (!isAdmin) {
         alert('Admin access required to delete comments!');
@@ -858,6 +896,7 @@ async function deleteComment(postId, commentId) {
     }
 }
 
+
 function toggleComments(postId) {
     const commentSection = document.getElementById(`comment-section-${postId}`);
     if (!commentSection) return;
@@ -875,6 +914,7 @@ function toggleComments(postId) {
     }
 }
 
+
 function toggleCommentInput(postId, commentId) {
     const inputId = commentId ? `comment-input-${postId}-${commentId}` : `comment-input-${postId}-top`;
     const inputSection = document.getElementById(inputId);
@@ -884,6 +924,7 @@ function toggleCommentInput(postId, commentId) {
         console.error(`[ToggleCommentInput] Element #${inputId} not found`);
     }
 }
+
 
         async function claimQuestReward(questId, type) {
     if (!loggedInUsername) {
@@ -917,6 +958,7 @@ function toggleCommentInput(postId, commentId) {
     }
 }
 
+
 async function updateQuestProgressClient(questId, type, increment) {
     if (!loggedInUsername) {
         console.log('[Client Quest Update] Not logged in—skipping');
@@ -942,6 +984,7 @@ async function updateQuestProgressClient(questId, type, increment) {
     }
 }
 
+
 async function updateUserPermissions() {
     if (!loggedInUsername || !isAdmin) {
         alert('Admin access required!');
@@ -961,12 +1004,14 @@ async function updateUserPermissions() {
         canDeleteVideos: document.getElementById('admin-canDeleteVideos').checked
     };
 
+
     const response = await fetch(`/admin/update-user-permissions/${username}`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ isAdmin, permissions }),
         credentials: 'include'
     });
+
 
     const result = await response.json();
     if (response.ok && result.success) {
@@ -984,6 +1029,8 @@ async function updateUserPermissions() {
 }
 
 
+
+
 function trackLoginStreak() {
             const today = new Date().toDateString();
             if (lastLogin !== today) {
@@ -996,6 +1043,7 @@ function trackLoginStreak() {
             }
         }
 
+
 function updatePointsDisplay() {
             if (typeof lemonadePoints === 'undefined') {
                 console.warn('Points not initialized yet—waiting for BigInteger');
@@ -1004,6 +1052,7 @@ function updatePointsDisplay() {
             }
             document.getElementById('points-display').textContent = `Lemonade Points: ${lemonadePoints.toString()}`;
         }
+
 
 async function updateAdminDisplay() {
             const adminContent = document.getElementById('admin-content');
@@ -1025,6 +1074,7 @@ async function updateAdminDisplay() {
                 adminPermissions.style.display = 'none';
             }
         }
+
 
 async function showContent(sectionId) {
     console.log(`showContent called with: ${sectionId}`);
@@ -1056,6 +1106,7 @@ async function showContent(sectionId) {
         }
     }
 
+
     if (sectionId !== 'friends') stopAllGameTimers();
     document.querySelectorAll('.building').forEach(building => building.classList.remove('active'));
     const activeBuilding = document.getElementById(`building-${sectionId}`);
@@ -1069,10 +1120,12 @@ async function showContent(sectionId) {
     if (loggedInUsername && sectionId !== 'quests') trackSectionVisit(sectionId);
 }
 
+
 function toggleAuth() {
     if (loggedInUsername) logout();
     else showContent('home');
  }
+
 
 async function mintNFT(button) {
     console.log('[Mint] === HEX VERSION LOADED ===');
@@ -1084,8 +1137,10 @@ async function mintNFT(button) {
     }
     console.log('[Mint] Solana Web3 confirmed:', window.solana);
 
+
     const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
     button.classList.add('loading');
+
 
     try {
         await window.solana.connect();
@@ -1095,18 +1150,22 @@ async function mintNFT(button) {
         const username = loggedInUsername || 'tester';
         if (!username) throw new Error('Please login to mint!');
 
+
         const response = await fetch('https://lemonclubcollective.com/api/mint-nft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ walletAddress: publicKey, username: username })
         });
 
+
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
 
         const data = await response.json();
         console.log('[Mint] Full Server Response:', data);
         console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
         const imageUri = `https://lemonclubcollective.com/output/nft_${Date.now()}.png`;
+
 
         console.log('[Mint] Signing Tx1 with Phantom...');
         if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
@@ -1116,6 +1175,7 @@ async function mintNFT(button) {
         const signature1 = await connection.sendRawTransaction(signedTx1.serialize());
         console.log('[Mint] Transaction 1 Signature:', signature1);
 
+
         const tx1Confirmation = await connection.confirmTransaction({
             signature: signature1,
             blockhash: transaction1.recentBlockhash,
@@ -1123,6 +1183,7 @@ async function mintNFT(button) {
         }, { commitment: 'confirmed', maxRetries: 10 });
         if (tx1Confirmation.value.err) throw new Error('Tx1 failed: ' + JSON.stringify(tx1Confirmation.value.err));
         console.log('[Mint] Tx1 Confirmed');
+
 
         console.log('[Mint] Signing Tx2 with Phantom...');
         if (!data.transaction2) throw new Error('Transaction2 missing from server response!');
@@ -1132,6 +1193,7 @@ async function mintNFT(button) {
         const signature2 = await connection.sendRawTransaction(signedTx2.serialize());
         console.log('[Mint] Transaction 2 Signature:', signature2);
 
+
         const tx2Confirmation = await connection.confirmTransaction({
             signature: signature2,
             blockhash: transaction2.recentBlockhash,
@@ -1140,9 +1202,11 @@ async function mintNFT(button) {
         if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
         console.log('[Mint] Tx2 Confirmed');
 
+
         mintingPoints = bigInt(mintingPoints || 0).add(25);
         lemonadePoints = bigInt(lemonadePoints || 0).add(25);
         updatePointsDisplay();
+
 
         await updateNFTDisplay('nft-info');
         await updateQuestProgressClient('launch-party', 'limited', 1);
@@ -1192,6 +1256,7 @@ async function stakeNFT(mintAddress) {
     }
 }
 
+
 async function evolveNFT(mintAddress, button) {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect wallet to evolve!');
@@ -1201,6 +1266,7 @@ async function evolveNFT(mintAddress, button) {
         alert('Need 10 Lemonade Points to evolve!');
         return;
     }
+
 
     const points = bigInt(lemonadePoints || 0);
     if (points.lt(10)) {
@@ -1237,12 +1303,14 @@ async function evolveNFT(mintAddress, button) {
     }
 }
 
+
        
         async function trackPost() {
             if (!loggedInUsername) return;
             await updateQuestProgressClient('citrus-explorer', 'daily', 1);
             await updateQuestProgressClient('lemon-bard', 'weekly', 1);
         }
+
 
         async function trackSocialVisit() {
             if (!loggedInUsername) return;
@@ -1254,6 +1322,7 @@ async function evolveNFT(mintAddress, button) {
             }
         }
 
+
         async function trackSectionVisit(sectionId) {
             if (!loggedInUsername || sectionId === 'home' || sectionId === 'what-is-lcc') return;
             if (!sectionsVisitedToday.has(sectionId)) {
@@ -1261,6 +1330,7 @@ async function evolveNFT(mintAddress, button) {
                 await updateQuestProgressClient('section-adventurer', 'daily', 1);
             }
         }
+
 
        async function subscribeNewsletter() {
     const email = document.getElementById('newsletter-email').value.trim();
@@ -1289,6 +1359,7 @@ async function evolveNFT(mintAddress, button) {
         alert(result.error || 'Failed to subscribe');
     }
 }
+
 
 async function uploadProfilePic() {
     if (!loggedInUsername) {
@@ -1321,6 +1392,7 @@ async function uploadProfilePic() {
     }
 }
 
+
  async function uploadVideo() {
     if (!loggedInUsername || !isAdmin) {
         alert('Admin access required to upload videos!');
@@ -1340,10 +1412,12 @@ async function uploadProfilePic() {
         return;
     }
 
+
     const formData = new FormData();
     formData.append('video', fileInput.files[0]);
     formData.append('title', titleInput.value);
     formData.append('description', descInput.value);
+
 
     const uploadButton = document.querySelector('button[onclick="uploadVideo()"]');
     uploadButton.disabled = true;
@@ -1353,10 +1427,11 @@ async function uploadProfilePic() {
             body: formData,
             credentials: 'include'
         });
-	  if (!response.ok) {
+          if (!response.ok) {
             const text = await response.text();
             throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${text}`);
         }
+
 
         const result = await response.json();
         console.log('[Video Upload] Response:', result);
@@ -1376,6 +1451,7 @@ async function uploadProfilePic() {
         uploadButton.disabled = false;
     }
 }
+
 
 async function postBlog() {
     if (!loggedInUsername || !isAdmin) {
@@ -1414,6 +1490,7 @@ async function postBlog() {
     }
 }
 
+
 async function toggleWalletConnection() {
     console.log('toggleWalletConnection called');
     const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
@@ -1447,6 +1524,7 @@ async function toggleWalletConnection() {
     }
 }
 
+
         function disconnectWallet() {
             if (window.solana) window.solana.disconnect();
             walletAddress = null;
@@ -1454,6 +1532,8 @@ async function toggleWalletConnection() {
             if (connectBtnStaking) connectBtnStaking.textContent = 'Connect Solana Wallet';
             document.getElementById('wallet-status').textContent = 'Wallet not connected';
  }
+
+
 
 
       async function subscribe() {
@@ -1476,6 +1556,7 @@ async function toggleWalletConnection() {
     }
 }
 
+
 async function loadProducts() {
     const response = await fetch(`/printify-products`, { // Fixed URL syntax
         method: 'GET',
@@ -1489,6 +1570,7 @@ async function loadProducts() {
         });
         document.getElementById('product-list').innerHTML = html;
 
+
         data.data.forEach(product => {
             const img = document.getElementById(`product-img-${product.id}`);
             if (product.images && product.images[0] && product.images[0].src) {
@@ -1501,6 +1583,7 @@ async function loadProducts() {
         document.getElementById('product-list').innerHTML = `<p>${data.message || 'No products available yet'}</p>`;
     }
 }
+
 
         async function buyMerch(productId, price) {
     if (!walletAddress) {
@@ -1531,12 +1614,14 @@ async function loadProducts() {
     }
 }
 
+
         
         function formatTime(seconds) {
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs < 10 ? '0' + secs : secs}`;
  }
+
 
         async function startGame(gameId) {
             if (!loggedInUsername) {
@@ -1561,6 +1646,7 @@ async function loadProducts() {
             }, 1000);
         }
 
+
         async function stopGame(gameId) {
             const iframe = document.getElementById(`game-${gameId}`);
             const startBtn = iframe.parentElement.querySelector('.start-game-btn');
@@ -1583,6 +1669,7 @@ async function loadProducts() {
             stopBtn.style.display = 'none';
  }
 
+
       async function updatePlaytime(minutes) {
     if (!loggedInUsername) return;
     const response = await fetch(`/playtime/${loggedInUsername}`, {
@@ -1599,6 +1686,7 @@ async function loadProducts() {
         updateProfileDisplay();
     }
 }
+
 
 async function claimVictory(gameId) {
     if (!loggedInUsername) {
@@ -1625,6 +1713,7 @@ async function claimVictory(gameId) {
     }
 }
 
+
 async function fetchVictoryClaims() {
     if (!loggedInUsername) return;
     const response = await fetch(`/profile/${loggedInUsername}`, {
@@ -1642,6 +1731,7 @@ async function fetchVictoryClaims() {
         });
     }
 }
+
 
 async function submitTicket(event) {
     event.preventDefault();
@@ -1669,6 +1759,7 @@ async function submitTicket(event) {
     }
 }
 
+
 async function claimQuest(type, questId) {
     const response = await fetch(`/quests/${loggedInUsername}/claim`, {
         method: 'POST',
@@ -1685,6 +1776,7 @@ async function claimQuest(type, questId) {
     }
 }
         
+
 
        async function deleteVideo(id) {
     if (!isAdmin) {
@@ -1715,6 +1807,7 @@ async function claimQuest(type, questId) {
     }
 }
 
+
 async function deleteBlog(id) {
     if (!isAdmin) {
         alert('Admin access required to delete blogs!');
@@ -1744,6 +1837,7 @@ async function deleteBlog(id) {
     }
 }
 
+
 async function deletePost(postId) {
     if (!isAdmin) return alert('Admin access required!');
     const response = await fetch(`/delete-post`, { // Fixed URL syntax
@@ -1760,4 +1854,3 @@ async function deletePost(postId) {
         alert(result.error || 'Failed to delete post');
     }
 }
-
