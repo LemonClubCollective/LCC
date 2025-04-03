@@ -1394,7 +1394,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 
         upload(req, res, async (err) => {
             if (err) return res.status(500).json({ error: 'File upload failed' });
-            const baseUrl = process.env.EB_URL || 'https://lemonclubcollective.com';
+            const baseUrl = process.env.EB_URL || 'https://www.lemonclubcollective.com';
             const profilePicUrl = `${baseUrl}/uploads/${req.file.filename}`;
             users[username.toLowerCase()].profilePic = profilePicUrl;
             await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });

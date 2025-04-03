@@ -1151,7 +1151,7 @@ async function mintNFT(button) {
         if (!username) throw new Error('Please login to mint!');
 
 
-        const response = await fetch('https://lemonclubcollective.com/api/mint-nft', {
+        const response = await fetch('https://www.lemonclubcollective.com/api/mint-nft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ walletAddress: publicKey, username: username })
@@ -1164,7 +1164,7 @@ async function mintNFT(button) {
         const data = await response.json();
         console.log('[Mint] Full Server Response:', data);
         console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
-        const imageUri = `https://lemonclubcollective.com/output/nft_${Date.now()}.png`;
+        const imageUri = `https://www.lemonclubcollective.com/output/nft_${Date.now()}.png`;
 
 
         console.log('[Mint] Signing Tx1 with Phantom...');
