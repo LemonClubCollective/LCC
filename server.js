@@ -32,7 +32,7 @@ const s3Client = new S3Client({
 
 
 // Constants
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 8080;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -417,7 +417,7 @@ async function initialize() {
 
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 3001) => {
+    const startServer = async (portToTry = process.env.PORT || 80) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
