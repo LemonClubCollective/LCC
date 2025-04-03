@@ -32,7 +32,7 @@ const s3Client = new S3Client({
 
 
 // Constants
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3001;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -417,7 +417,7 @@ async function initialize() {
 
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 80) => {
+    const startServer = async (portToTry = process.env.PORT || 3001) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
@@ -2103,24 +2103,39 @@ app.post('/posts/delete-comment', async (req, res) => {
 app.post('/submit-ticket', async (req, res) => {
     try {
         const { name, email, message } = req.body;
-        if (!name || !email || !message) return res.status(400).json({ error: 'All fields required' });
-        const ticket = { name, email, message, status: 'open', timestamp: new Date().toISOString() };
-        tickets.push(ticket);
-        await saveData(tickets, 'tickets');
-        const mailOptions = {
-            from: 'lemonclub@usa.com',
-            to: 'lemonclub@usa.com',
-            subject: 'New Support Ticket',
-            text: `New ticket from ${name} (${email}):\n\n${message}`
+        console.log('[SubmitTicket] Received request:', { name, email, message });
+        if (!name || !email || !message) {
+            console.log('[SubmitTicket] Missing required fields:', { name, email, message });
+            return res.status(400).json({ error: 'All fields required' });
+        }
+
+        const sesParams = {
+            Source: 'matthew.kobilan@gmail.com', // Use verified email for testing
+            Destination: {
+                ToAddresses: ['matthew.kobilan@gmail.com'] // Use verified email for testing
+            },
+            Message: {
+                Body: {
+                    Text: {
+                        Data: `New Ticket\nName: ${name}\nEmail: ${email}\nMessage: ${message}`
+                    }
+                },
+                Subject: {
+                    Data: 'New Support Ticket'
+                }
+            }
         };
-        await transporter.send(new SendEmailCommand(mailOptions));
+
+        console.log('[SubmitTicket] Sending email with SES params:', sesParams);
+        const command = new SendEmailCommand(sesParams);
+        await transporter.send(command); // transporter is your SESClient instance
+        console.log('[SubmitTicket] Email sent successfully');
         res.json({ success: true, ticketId: tickets.length });
     } catch (error) {
-        console.error('[SubmitTicket] Error:', error.message);
-        res.status(500).json({ error: 'Failed to submit ticket' });
+        console.error('[SubmitTicket] Error:', error.message, error.stack);
+        res.status(500).json({ error: 'Failed to submit ticket', details: error.message });
     }
 });
-
 
 
 

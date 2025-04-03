@@ -1756,13 +1756,15 @@ async function submitTicket(event) {
         alert('Please fill all fields!');
         return;
     }
-    const response = await fetch(`/submit-ticket`, { // Fixed URL syntax
+    const response = await fetch('/submit-ticket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, message }),
         credentials: 'include'
     });
+    console.log('[SubmitTicket] Response status:', response.status);
     const result = await response.json();
+    console.log('[SubmitTicket] Response data:', result);
     if (response.ok && result.success) {
         alert('Ticket submitted successfully! Ticket #' + result.ticketId);
         document.getElementById('ticketName').value = '';
