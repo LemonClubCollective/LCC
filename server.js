@@ -1414,7 +1414,6 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 
 
 
-
 app.post('/upload-video', async (req, res) => {
     try {
         const videoDir = path.join(__dirname, 'videos');
