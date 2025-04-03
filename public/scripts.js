@@ -1389,7 +1389,7 @@ async function uploadProfilePic() {
     }
     const formData = new FormData();
     formData.append('profilePic', file);
-       const response = await fetch(`${apiBaseUrl}/upload-profile-pic/${log
+        const response = await fetch(`${apiBaseUrl}/upload-profile-pic/${loggedInUsername}`, {
         method: 'POST',
         body: formData,
         credentials: 'include'
