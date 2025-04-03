@@ -152,7 +152,20 @@ function updateProfileIcon() {
     }
 
     const defaultProfilePic = 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
-    let profilePicUrl = loggedInProfilePic || defaultProfilePic;
+    let profilePicUrl;
+    
+    if (loggedInProfilePic) {
+        // If it's already a full CloudFront URL, use it directly
+        if (loggedInProfilePic.startsWith('https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/')) {
+            profilePicUrl = loggedInProfilePic;
+        } else {
+            // Extract just the filename if it's a full URL, or use the string directly if it's just a filename
+            const filename = loggedInProfilePic.split('/').pop();
+            profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
+        }
+    } else {
+        profilePicUrl = defaultProfilePic;
+    }
 
     const img = new Image();
     img.onerror = () => {

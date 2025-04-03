@@ -1292,21 +1292,34 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
             const filename = `${Date.now()}.jpg`;
             const uploadParams = {
                 Bucket: 'lemonclub-nftgen',
-                Key: `profilepics/${filename}`,
+                Key: `assetsNFTmain/profilepics/${filename}`,
                 Body: req.file.buffer,
                 ContentType: 'image/jpeg',
                 ACL: 'public-read' // Make the file publicly accessible
             };
 
             try {
-                await s3Client.send(new PutObjectCommand(uploadParams));
+                // Add 10 second timeout to S3 upload
+                const uploadPromise = s3Client.send(new PutObjectCommand(uploadParams));
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('S3 upload timed out after 10 seconds')), 10000)
+                );
+
+                await Promise.race([uploadPromise, timeoutPromise]);
+                
                 const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
                 users[username.toLowerCase()].profilePic = profilePicUrl;
                 await db.collection('users').updateOne({ username: { $regex: `^${username}$`, $options: 'i' } }, { $set: { profilePic: profilePicUrl } });
                 await saveData(users, 'users');
                 res.json({ success: true, profilePicUrl });
             } catch (s3Error) {
-                console.error('[UploadProfilePic] S3 Error:', s3Error.message);
+                console.error('[UploadProfilePic] S3 Error:', {
+                    message: s3Error.message,
+                    code: s3Error.code,
+                    statusCode: s3Error.$metadata?.httpStatusCode,
+                    requestId: s3Error.$metadata?.requestId,
+                    time: new Date().toISOString()
+                });
                 res.status(500).json({ error: 'Failed to upload to S3' });
             }
         });
