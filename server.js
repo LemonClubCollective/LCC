@@ -32,7 +32,7 @@ const s3Client = new S3Client({
 
 
 // Constants
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3001;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -417,7 +417,7 @@ async function initialize() {
 
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 80) => {
+    const startServer = async (portToTry = process.env.PORT || 3001) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
@@ -1387,7 +1387,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 
         upload(req, res, async (err) => {
             if (err) {
-                console.error('[UploadProfilePic] Multer error:', err.message);
+                console.error('[UploadProfilePic] Multer error:', err.message, err.stack);
                 return res.status(500).json({ error: 'File upload failed', details: err.message });
             }
             if (!req.file) {
@@ -1402,11 +1402,14 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
                 Key: `assetsNFTmain/profilepics/${filename}`,
                 Body: req.file.buffer,
                 ContentType: 'image/jpeg',
-                ACL: 'public-read'
             };
 
             try {
-                await s3Client.send(new PutObjectCommand(uploadParams));
+                const uploadPromise = s3Client.send(new PutObjectCommand(uploadParams));
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('S3 upload timed out after 10 seconds')), 10000);
+                });
+                const result = await Promise.race([uploadPromise, timeoutPromise]);
                 console.log('[UploadProfilePic] Successfully uploaded to S3:', filename);
                 const profilePicUrl = `https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/${filename}`;
                 users[username.toLowerCase()].profilePic = profilePicUrl;
