@@ -440,8 +440,11 @@ function showNFTModal(index, nfts) {
     document.getElementById('nft-modal-last-points').textContent = nft.lastPoints || 0;
     document.getElementById('nft-modal-timestamp').textContent = new Date().toLocaleString();
     window.currentNFT = nft;
-    modal.style.display = 'block';
-    console.log('[NFTModal] Modal display set to block');
+    modal.style.display = 'block !important';
+    console.log('[NFTModal] Modal display set to block, current style:', modal.style.display);
+    console.log('[NFTModal] Modal computed style:', window.getComputedStyle(modal).display);
+    console.log('[NFTModal] Modal visibility:', window.getComputedStyle(modal).visibility);
+    console.log('[NFTModal] Modal z-index:', window.getComputedStyle(modal).zIndex);
 }
 
 function closeNFTModal() {
