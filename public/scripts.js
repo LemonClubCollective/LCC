@@ -426,6 +426,11 @@ function showNFTModal(index, nfts) {
         console.error('[NFTModal] NFT not found at index:', index);
         return;
     }
+    const modal = document.getElementById('nft-modal');
+    if (!modal) {
+        console.error('[NFTModal] Modal element not found');
+        return;
+    }
     document.getElementById('nft-modal-title').textContent = nft.name;
     document.getElementById('nft-modal-image').src = nft.imageUri;
     document.getElementById('nft-modal-name').textContent = nft.name;
@@ -435,11 +440,16 @@ function showNFTModal(index, nfts) {
     document.getElementById('nft-modal-last-points').textContent = nft.lastPoints || 0;
     document.getElementById('nft-modal-timestamp').textContent = new Date().toLocaleString();
     window.currentNFT = nft;
-    document.getElementById('nft-modal').style.display = 'block';
+    modal.style.display = 'block';
+    console.log('[NFTModal] Modal display set to block');
 }
 
 function closeNFTModal() {
-    document.getElementById('nft-modal').style.display = 'none';
+    const modal = document.getElementById('nft-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        console.log('[NFTModal] Modal closed');
+    }
 }
 
 function shareNFTOnX() {
