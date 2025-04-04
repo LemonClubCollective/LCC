@@ -403,15 +403,14 @@ async function updateNFTDisplay(containerId, showButtons = true) {
         console.log('[NFT Display] Generated HTML:', html);
         container.innerHTML = html;
 
-        // Add event listeners for NFT cards
         const cards = container.querySelectorAll('.nft-card');
         console.log('[NFTDisplay] Found NFT cards:', cards.length);
         cards.forEach((card, idx) => {
-            card.removeEventListener('click', card.clickHandler); // Remove any existing listener
+            card.removeEventListener('click', card.clickHandler);
             card.clickHandler = (event) => {
-                console.log('[NFTDisplay] Card clicked:', idx);
+                console.log('[NFTDisplay] Clicked NFT card at index:', idx);
                 const index = card.getAttribute('data-index');
-                console.log('[NFTDisplay] Index:', index);
+                console.log('[NFTDisplay] Index from attribute:', index);
                 showNFTModal(index, nfts);
             };
             card.addEventListener('click', card.clickHandler);
@@ -442,8 +441,8 @@ function showNFTModal(index, nfts) {
     document.getElementById('nft-modal-last-points').textContent = nft.lastPoints || 0;
     document.getElementById('nft-modal-timestamp').textContent = new Date().toLocaleString();
     window.currentNFT = nft;
-    modal.style.display = 'block !important';
-    console.log('[NFTModal] Modal display set to block, current style:', modal.style.display);
+    modal.classList.add('active');
+    console.log('[NFTModal] Modal class set to active, current style:', modal.style.display);
     console.log('[NFTModal] Modal computed style:', window.getComputedStyle(modal).display);
     console.log('[NFTModal] Modal visibility:', window.getComputedStyle(modal).visibility);
     console.log('[NFTModal] Modal z-index:', window.getComputedStyle(modal).zIndex);
@@ -453,7 +452,7 @@ function showNFTModal(index, nfts) {
 function closeNFTModal() {
     const modal = document.getElementById('nft-modal');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('active');
         console.log('[NFTModal] Modal closed');
     }
 }
