@@ -447,6 +447,7 @@ function showNFTModal(index, nfts) {
     console.log('[NFTModal] Modal computed style:', window.getComputedStyle(modal).display);
     console.log('[NFTModal] Modal visibility:', window.getComputedStyle(modal).visibility);
     console.log('[NFTModal] Modal z-index:', window.getComputedStyle(modal).zIndex);
+    console.log('[NFTModal] Modal outerHTML:', modal.outerHTML);
 }
 
 function closeNFTModal() {
