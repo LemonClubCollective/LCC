@@ -1412,15 +1412,15 @@
 
 <style>
     .modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        border: 5px solid red; /* Debug border */
+        display: none !important; /* Ensure initial state */
+        position: fixed !important;
+        z-index: 10000 !important; /* Higher z-index */
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        background-color: rgba(0, 0, 0, 0.5) !important;
+        border: 10px solid red !important; /* Debug border */
     }
     .modal-content {
         background-color: rgba(255, 250, 205, 0.95);
@@ -1442,7 +1442,7 @@
     .close:hover {
         color: #ffeb3b;
     }
-</style>            
+</style>
 </div>
             <footer>
                 <p>© 2025 Lemon Club Collective | All Rights Reserved | <a href="https://www.lemonclubcollective.com" style="color: #ff4500;">Visit Our Site</a> | <a href="/terms.html" style="color: #ff4500;">Terms</a> | <a href="/privacy.html" style="color: #ff4500;">Privacy</a></p>
