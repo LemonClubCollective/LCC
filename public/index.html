@@ -765,6 +765,21 @@
     </style>
 </head>
 <body>
+<body>
+    <div id="nft-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeNFTModal()">×</span>
+            <h2 id="nft-modal-title"></h2>
+            <img id="nft-modal-image" src="" alt="NFT Image" style="max-width: 200px; border-radius: 10px;">
+            <p><strong>Name:</strong> <span id="nft-modal-name"></span></p>
+            <p><strong>Mint Address:</strong> <span id="nft-modal-mint-address"></span></p>
+            <p><strong>Staked:</strong> <span id="nft-modal-staked"></span></p>
+            <p><strong>Stake Start:</strong> <span id="nft-modal-stake-start"></span></p>
+            <p><strong>Last Points:</strong> <span id="nft-modal-last-points"></span></p>
+            <p><strong>Timestamp:</strong> <span id="nft-modal-timestamp"></span></p>
+            <button onclick="shareNFTOnX()" style="margin-top: 20px; padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Share on X</button>
+        </div>
+    </div>
     <div id="splash-page" class="active">
         <div class="splash-icon" style="top: 10%; left: 10%; width: 240px;">
             <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/townhall.png" alt="Town Hall">
@@ -1395,20 +1410,6 @@
                     <input type="file" id="video-upload" accept="video/*">
                     <button onclick="uploadVideo()" data-tooltip="Upload Video">Upload Video</button>
                 </div>
-	<div id="nft-modal" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="closeNFTModal()">×</span>
-        <h2 id="nft-modal-title"></h2>
-        <img id="nft-modal-image" src="" alt="NFT Image" style="max-width: 200px; border-radius: 10px;">
-        <p><strong>Name:</strong> <span id="nft-modal-name"></span></p>
-        <p><strong>Mint Address:</strong> <span id="nft-modal-mint-address"></span></p>
-        <p><strong>Staked:</strong> <span id="nft-modal-staked"></span></p>
-        <p><strong>Stake Start:</strong> <span id="nft-modal-stake-start"></span></p>
-        <p><strong>Last Points:</strong> <span id="nft-modal-last-points"></span></p>
-        <p><strong>Timestamp:</strong> <span id="nft-modal-timestamp"></span></p>
-        <button onclick="shareNFTOnX()" style="margin-top: 20px; padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Share on X</button>
-    </div>
-</div>
 
 <style>
     #nft-modal.modal {
@@ -1426,26 +1427,28 @@
     }
     #nft-modal.modal.active {
         display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
     }
     .modal-content {
-        background-color: rgba(255, 250, 205, 0.95);
-        margin: 15% auto;
-        padding: 20px;
-        border-radius: 15px;
-        шири: 80%;
-        max-width: 500px;
-        text-align: center;
-        font-family: 'Chelsea Market', cursive;
-        color: #228b22;
+        background-color: rgba(255, 250, 205, 0.95) !important;
+        margin: 15% auto !important;
+        padding: 20px !important;
+        border-radius: 15px !important;
+        width: 80% !important;
+        max-width: 500px !important;
+        text-align: center !important;
+        font-family: 'Chelsea Market', cursive !important;
+        color: #228b22 !important;
     }
     .close {
-        color: #ff4500;
-        float: right;
-        font-size: 28px;
-        cursor: pointer;
+        color: #ff4500 !important;
+        float: right !important;
+        font-size: 28px !important;
+        cursor: pointer !important;
     }
     .close:hover {
-        color: #ffeb3b;
+        color: #ffeb3b !important;
     }
 </style>
 </div>
