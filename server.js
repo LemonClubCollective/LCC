@@ -1772,19 +1772,67 @@ app.get('/api/quests/:username', async (req, res) => {
 app.get('/nft/:username', async (req, res) => {
     try {
         const { username } = req.params;
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        const lowerUsername = username.toLowerCase();
+        console.log(`[NFT] Fetching NFTs for user: ${lowerUsername}`);
+
+        // Fetch user from the database
+        const user = await db.collection('users').findOne({ username: { $regex: `^${lowerUsername}$`, $options: 'i' } });
         if (!user) {
-            console.error(`[NFT] User not found: ${username}`);
+            console.error(`[NFT] User not found: ${lowerUsername}`);
             return res.status(404).json({ success: false, error: 'User not found' });
         }
-        console.log(`[NFT] Fetched NFTs for ${username}:`, user.nfts.length);
-        res.json({ success: true, nfts: user.nfts || [] });
+
+        const nfts = user.nfts || [];
+        console.log(`[NFT] Fetched ${nfts.length} NFTs for ${lowerUsername}`);
+
+        // If Metaplex or connection isn't available, return basic NFT data
+        if (!metaplex || !connection) {
+            console.warn('[NFT] Metaplex or connection not available, returning basic NFT data');
+            return res.json({ success: true, nfts });
+        }
+
+        // Fetch on-chain metadata for each NFT
+        const enrichedNfts = await Promise.all(nfts.map(async (nft) => {
+            try {
+                const mintAddress = new PublicKey(nft.mintAddress);
+                console.log(`[NFT] Fetching metadata for mint: ${mintAddress.toBase58()}`);
+                const metadataAccount = await metaplex.nfts().findByMint({ mintAddress });
+                const metadata = metadataAccount.json || {};
+
+                // Extract attributes (Stage, Rarity, Background, Base)
+                const attributes = metadata.attributes || [];
+                const stage = attributes.find(attr => attr.trait_type === 'Stage')?.value || 'Sapling';
+                const rarity = attributes.find(attr => attr.trait_type === 'Rarity')?.value || 'Ruby';
+                const background = attributes.find(attr => attr.trait_type === 'Background')?.value || 'BGForestSunset';
+                const base = attributes.find(attr => attr.trait_type === 'Base')?.value || 'redrubysapling3';
+
+                // Enrich NFT with metadata
+                const enrichedNft = {
+                    ...nft,
+                    description: metadata.description || 'A unique Lemon Club NFT at the Lemon Sapling stage with Ruby rarity',
+                    collection: metadata.collection?.name || 'Lemon Sapling',
+                    uniqueHolders: metadata.collection?.uniqueHolders || 1,
+                    network: 'Solana Devnet',
+                    stage,
+                    rarity,
+                    background,
+                    base
+                };
+                console.log(`[NFT] Successfully enriched NFT ${mintAddress.toBase58()}:`, enrichedNft);
+                return enrichedNft;
+            } catch (error) {
+                console.error(`[NFT] Error fetching metadata for mint ${nft.mintAddress}:`, error.message);
+                return nft; // Fallback to basic NFT data
+            }
+        }));
+
+        console.log(`[NFT] Returning ${enrichedNfts.length} enriched NFTs for ${lowerUsername}`);
+        res.json({ success: true, nfts: enrichedNfts });
     } catch (error) {
         console.error('[NFT] Error:', error.message);
-        res.status(500).json({ error: 'Failed to fetch NFTs' });
+        res.status(500).json({ success: false, error: 'Failed to fetch NFTs' });
     }
 });
-
 
 
 
