@@ -438,8 +438,7 @@ function showNFTModal(index, nfts) {
     document.getElementById('nft-modal-mint-address').textContent = nft.mintAddress;
     document.getElementById('nft-modal-staked').textContent = nft.staked ? 'Yes' : 'No';
     document.getElementById('nft-modal-stake-start').textContent = nft.stakeStart ? new Date(nft.stakeStart).toLocaleString() : 'N/A';
-    document.getElementById('nft-modal-last-points').textContent = nft.lastPoints || 0;
-    document.getElementById('nft-modal-timestamp').textContent = new Date().toLocaleString();
+    document.getElementById('nft-modal-last-points').textContent = nft.lastPoints || 0; // Staked points
     window.currentNFT = nft;
     modal.classList.add('active');
     console.log('[NFTModal] Modal class set to active, current style:', modal.style.display);
