@@ -350,7 +350,7 @@ async function loadProducts() {
 }
 
 
-  async function updateNFTDisplay(containerId, showButtons = true) {
+async function updateNFTDisplay(containerId, showButtons = true) {
     if (!loggedInUsername) {
         document.getElementById(containerId).innerHTML = '<p>Please login to manage your Lemon NFTs!</p>';
         return;
@@ -368,7 +368,7 @@ async function loadProducts() {
             return;
         }
         let html = '';
-        nfts.forEach(nft => {
+        nfts.forEach((nft, index) => {
             const stageName = nft.name || 'Lemon Seed';
             const mintAddress = nft.mintAddress;
             const imageUri = nft.imageUri ? nft.imageUri.replace('3000', '3001') : `/output/nft_${Date.now()}.png`;
@@ -376,7 +376,7 @@ async function loadProducts() {
             console.log(`[NFT Display] NFT ${mintAddress} staked: ${staked}`);
             const baseStageName = stageName.split('#')[0].trim();
             const canEvolve = (typeof lemonadePoints.gte === 'function' ? lemonadePoints.gte(10) : Number(lemonadePoints) >= 10) && baseStageName !== 'Lemon Tree';
-            html += `<div class="nft-card ${staked ? 'staked' : ''}">
+            html += `<div class="nft-card ${staked ? 'staked' : ''}" onclick='showNFTModal(${JSON.stringify(nft)})'>
                 <img id="nft-img-${mintAddress}" alt="${stageName}" src="${imageUri}" 
                     onerror="this.onerror=null; this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/magicseed.png'; console.log('NFT image failed:', '${imageUri}')" 
                     style="max-width: 200px;">
@@ -385,10 +385,10 @@ async function loadProducts() {
                 <div class="nft-card-buttons">`;
             if (showButtons) {
                 html += `<button class="nft-card-button ${staked ? 'unstake-btn' : 'stake-btn'}" 
-                    onclick="${staked ? 'unstakeNFT' : 'stakeNFT'}('${mintAddress}')">
+                    onclick="${staked ? 'unstakeNFT' : 'stakeNFT'}('${mintAddress}'); event.stopPropagation();">
                     ${staked ? 'Unstake' : 'Stake'}
                 </button>`;
-                html += `<button class="nft-card-button evolve-btn" onclick="evolveNFT('${mintAddress}', this)" 
+                html += `<button class="nft-card-button evolve-btn" onclick="evolveNFT('${mintAddress}', this); event.stopPropagation();" 
                     ${canEvolve ? '' : 'disabled'}>Evolve</button>`;
             }
             html += '</div></div>';
@@ -398,6 +398,31 @@ async function loadProducts() {
     } else {
         document.getElementById(containerId).innerHTML = '<p>Error loading NFTs—try again!</p>';
     }
+}
+
+function showNFTModal(nft) {
+    document.getElementById('nft-modal-title').textContent = nft.name;
+    document.getElementById('nft-modal-image').src = nft.imageUri;
+    document.getElementById('nft-modal-name').textContent = nft.name;
+    document.getElementById('nft-modal-mint-address').textContent = nft.mintAddress;
+    document.getElementById('nft-modal-staked').textContent = nft.staked ? 'Yes' : 'No';
+    document.getElementById('nft-modal-stake-start').textContent = nft.stakeStart ? new Date(nft.stakeStart).toLocaleString() : 'N/A';
+    document.getElementById('nft-modal-last-points').textContent = nft.lastPoints || 0;
+    document.getElementById('nft-modal-timestamp').textContent = new Date().toLocaleString();
+    window.currentNFT = nft; // Store NFT data for sharing
+    document.getElementById('nft-modal').style.display = 'block';
+}
+
+function closeNFTModal() {
+    document.getElementById('nft-modal').style.display = 'none';
+}
+
+function shareNFTOnX() {
+    if (!window.currentNFT) return console.error('[ShareNFT] No NFT data available');
+    const nft = window.currentNFT;
+    const tweetText = `I just minted ${nft.name} on Lemon Club Collective! 🍋 Check it out at https://www.lemonclubcollective.com #NFT #LemonClubCollective`;
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+    window.open(url, '_blank', 'width=600,height=400');
 }
 
 
