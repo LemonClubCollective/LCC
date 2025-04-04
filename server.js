@@ -769,14 +769,22 @@ function trackLoginStreak(username) {
 app.post('/register', async (req, res) => {
     try {
         const { email, username, password, emailConsent } = req.body;
-        if (!email || !username || !password) return res.status(400).json({ error: 'Email, username, and password required' });
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Invalid email format' });
-
+        console.log('[Register] Received request:', { email, username, emailConsent });
+        if (!email || !username || !password) {
+            console.log('[Register] Missing required fields:', { email, username });
+            return res.status(400).json({ error: 'Email, username, and password required' });
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            console.log('[Register] Invalid email format:', email);
+            return res.status(400).json({ error: 'Invalid email format' });
+        }
 
         const lowerUsername = username.toLowerCase();
         const userExists = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (userExists) return res.status(400).json({ error: 'Username already taken' });
-
+        if (userExists) {
+            console.log('[Register] Username already taken:', username);
+            return res.status(400).json({ error: 'Username already taken' });
+        }
 
         const verificationToken = Math.random().toString(36).substring(2, 15);
         const newUser = { 
@@ -796,7 +804,7 @@ app.post('/register', async (req, res) => {
             lastLogin: 0,
             lastDailyReset: 0,
             weeklyResetTimestamp: Date.now(),
-            limitedResetTimestamp: Date.now(), // Add this
+            limitedResetTimestamp: Date.now(),
             profilePic: getRandomItem(profilePics),
             quests: {
                 daily: quests.daily.map(q => ({ id: q.id, title: q.title, description: q.description, goal: q.goal, reward: q.reward, progress: 0, completed: false, claimed: false, resetTimestamp: Date.now() })),
@@ -815,49 +823,124 @@ app.post('/register', async (req, res) => {
         users[lowerUsername] = newUser;
         await saveData(users, 'users');
 
-
-        const command = new SendEmailCommand({
-            Source: 'lemonclub@usa.com',
-            Destination: { ToAddresses: [email] },
+        const verificationLink = `https://www.lemonclubcollective.com/verify-email/${username}/${verificationToken}`;
+        const sesParams = {
+            Source: 'lemonclub@usa.com', // Verified sender for sandbox mode
+            Destination: {
+                ToAddresses: [email]
+            },
             Message: {
                 Subject: { Data: 'Verify Your Lemon Club Collective Account' },
                 Body: {
-                     Html: { 
-                        Data: `<p>Welcome to Lemon Club Collective! Click <a href="http://lemonclub-env2.us-east-1.elasticbeanstalk.com/verify-email/${username}/${verificationToken}">this link</a> to verify your email.</p>` 
+                    Html: {
+                        Data: `
+                        <html>
+                        <head>
+                            <style>
+                                body {
+                                    font-family: 'Chelsea Market', cursive;
+                                    background-color: #87ceeb;
+                                    color: #228b22;
+                                    text-align: center;
+                                    padding: 20px;
+                                }
+                                .container {
+                                    max-width: 600px;
+                                    margin: 0 auto;
+                                    background-color: rgba(255, 250, 205, 0.95);
+                                    padding: 20px;
+                                    border-radius: 15px;
+                                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                                }
+                                .logo {
+                                    max-width: 150px;
+                                    margin-bottom: 20px;
+                                }
+                                h1 {
+                                    color: #ff4500;
+                                    font-size: 36px;
+                                    text-shadow: 2px 2px 4px #fffacd;
+                                    margin-bottom: 20px;
+                                }
+                                p {
+                                    font-size: 18px;
+                                    line-height: 1.5;
+                                    margin-bottom: 30px;
+                                }
+                                .button {
+                                    display: inline-block;
+                                    padding: 15px 30px;
+                                    background: linear-gradient(45deg, #ffeb3b, #ff4500);
+                                    color: white;
+                                    font-size: 20px;
+                                    text-decoration: none;
+                                    border-radius: 15px;
+                                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+                                    transition: transform 0.2s;
+                                }
+                                .button:hover {
+                                    transform: scale(1.05);
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="container">
+                                <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lcclogo.png" alt="Lemon Club Collective Logo" class="logo">
+                                <h1>Welcome to Lemon Club Collective!</h1>
+                                <p>
+                                    Hey there, ${username}! 🍋 Welcome to Lemon Club Collective—a zesty community where NFT enthusiasts like you can mint, stake, and evolve unique digital lemons! Dive into arcade games, complete epic quests, and join us in turning crypto chaos into real-world wins through sustainable projects. Get ready for a juicy adventure—verify your email to start growing your lemon grove!
+                                </p>
+                                <a href="${verificationLink}" class="button">Verify Email</a>
+                            </div>
+                        </body>
+                        </html>
+                        `
                     },
-                    Text: { Data: `Welcome to Lemon Club Collective! Verify your email by copying this link into your browser: http://lemonclub-env2.us-east-1.elasticbeanstalk.com/verify-email/${username}/${verificationToken}` }
+                    Text: {
+                        Data: `Welcome to Lemon Club Collective! Verify your email by copying this link into your browser: ${verificationLink}`
+                    }
                 }
             }
-        });
+        };
+
+        console.log('[Register] Sending verification email:', sesParams);
+        const command = new SendEmailCommand(sesParams);
         await transporter.send(command);
-        console.log(`[Register] New user: ${username}, verification email sent to ${email}`);
+        console.log('[Register] Verification email sent successfully to:', email);
+
         res.json({ success: true, message: 'Registered—check email to verify!' });
     } catch (error) {
-        console.error('[Register] Error:', error.message);
-        res.status(500).json({ error: 'Failed to register' });
+        console.error('[Register] Error:', error.message, error.stack);
+        res.status(500).json({ error: 'Failed to register', details: error.message });
     }
 });
-
 
 app.get('/verify-email/:username/:token', async (req, res) => {
-    const { username, token } = req.params;
-    const lowerUsername = username.toLowerCase(); // Normalize to lowercase
-    const user = await db.collection('users').findOne({ username: lowerUsername });
-    if (!user || user.verificationToken !== token) {
-        console.log(`[Verify-Email] Failed for ${lowerUsername}: user=${JSON.stringify(user)}, token=${token}`);
-        return res.status(400).send('Invalid verification token');
+    try {
+        const { username, token } = req.params;
+        console.log('[VerifyEmail] Received request:', { username, token });
+        const lowerUsername = username.toLowerCase();
+        const user = await db.collection('users').findOne({ username: lowerUsername });
+        if (!user || user.verificationToken !== token) {
+            console.log(`[VerifyEmail] Failed for ${lowerUsername}: user=${JSON.stringify(user)}, token=${token}`);
+            return res.status(400).send('Invalid verification token');
+        }
+
+        await db.collection('users').updateOne(
+            { username: lowerUsername },
+            { $set: { isVerified: true, verificationToken: null } }
+        );
+        users[lowerUsername] = { ...user, isVerified: true, verificationToken: null };
+        await saveData(users, 'users');
+        console.log(`[VerifyEmail] Successfully verified ${lowerUsername}`);
+
+        // Redirect to the homepage with a success message
+        res.redirect('https://www.lemonclubcollective.com?verified=true');
+    } catch (error) {
+        console.error('[VerifyEmail] Error:', error.message, error.stack);
+        res.status(500).send('Failed to verify email');
     }
-    await db.collection('users').updateOne(
-        { username: lowerUsername },
-        { $set: { isVerified: true, verificationToken: null } }
-    );
-    users[lowerUsername] = { ...user, isVerified: true, verificationToken: null };
-    await saveData(users, 'users');
-    console.log(`[Verify-Email] Successfully verified ${lowerUsername}`);
-    res.send('Email Verified! <a href="/">Click here to log in</a>');
 });
-
-
 app.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
