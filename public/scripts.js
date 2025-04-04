@@ -407,12 +407,14 @@ async function updateNFTDisplay(containerId, showButtons = true) {
         const cards = container.querySelectorAll('.nft-card');
         console.log('[NFTDisplay] Found NFT cards:', cards.length);
         cards.forEach((card, idx) => {
-            card.addEventListener('click', (event) => {
+            card.removeEventListener('click', card.clickHandler); // Remove any existing listener
+            card.clickHandler = (event) => {
                 console.log('[NFTDisplay] Card clicked:', idx);
                 const index = card.getAttribute('data-index');
                 console.log('[NFTDisplay] Index:', index);
                 showNFTModal(index, nfts);
-            });
+            };
+            card.addEventListener('click', card.clickHandler);
         });
     } else {
         container.innerHTML = '<p>Error loading NFTs—try again!</p>';
