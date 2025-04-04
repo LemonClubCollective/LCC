@@ -351,10 +351,17 @@ async function loadProducts() {
 
 
 async function updateNFTDisplay(containerId, showButtons = true) {
-    if (!loggedInUsername) {
-        document.getElementById(containerId).innerHTML = '<p>Please login to manage your Lemon NFTs!</p>';
+    console.log('[NFTDisplay] Starting update for container:', containerId);
+    const container = document.getElementById(containerId);
+    if (!container) {
+        console.error(`[NFTDisplay] Container ${containerId} not found`);
         return;
     }
+    if (!loggedInUsername) {
+        container.innerHTML = '<p>Please login to manage your Lemon NFTs!</p>';
+        return;
+    }
+
     const response = await fetch(`/nft/${loggedInUsername.toLowerCase()}`, { 
         method: 'GET',
         credentials: 'include'
@@ -364,7 +371,7 @@ async function updateNFTDisplay(containerId, showButtons = true) {
     if (response.ok && data.success) {
         const nfts = data.nfts || [];
         if (nfts.length === 0) {
-            document.getElementById(containerId).innerHTML = '<p>No NFTs yet—mint one to start growing!</p>';
+            container.innerHTML = '<p>No NFTs yet—mint one to start growing!</p>';
             return;
         }
         let html = '';
@@ -394,21 +401,26 @@ async function updateNFTDisplay(containerId, showButtons = true) {
             html += '</div></div>';
         });
         console.log('[NFT Display] Generated HTML:', html);
-        document.getElementById(containerId).innerHTML = html;
+        container.innerHTML = html;
 
         // Add event listeners for NFT cards
-        document.getElementById(containerId).querySelectorAll('.nft-card').forEach(card => {
+        const cards = container.querySelectorAll('.nft-card');
+        console.log('[NFTDisplay] Found NFT cards:', cards.length);
+        cards.forEach((card, idx) => {
             card.addEventListener('click', (event) => {
+                console.log('[NFTDisplay] Card clicked:', idx);
                 const index = card.getAttribute('data-index');
+                console.log('[NFTDisplay] Index:', index);
                 showNFTModal(index, nfts);
             });
         });
     } else {
-        document.getElementById(containerId).innerHTML = '<p>Error loading NFTs—try again!</p>';
+        container.innerHTML = '<p>Error loading NFTs—try again!</p>';
     }
 }
 
 function showNFTModal(index, nfts) {
+    console.log('[NFTModal] Showing modal for index:', index);
     const nft = nfts[index];
     if (!nft) {
         console.error('[NFTModal] NFT not found at index:', index);
