@@ -376,7 +376,7 @@ async function updateNFTDisplay(containerId, showButtons = true) {
             console.log(`[NFT Display] NFT ${mintAddress} staked: ${staked}`);
             const baseStageName = stageName.split('#')[0].trim();
             const canEvolve = (typeof lemonadePoints.gte === 'function' ? lemonadePoints.gte(10) : Number(lemonadePoints) >= 10) && baseStageName !== 'Lemon Tree';
-            html += `<div class="nft-card ${staked ? 'staked' : ''}" onclick='showNFTModal(${JSON.stringify(nft)})'>
+            html += `<div class="nft-card ${staked ? 'staked' : ''}" data-index="${index}">
                 <img id="nft-img-${mintAddress}" alt="${stageName}" src="${imageUri}" 
                     onerror="this.onerror=null; this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/magicseed.png'; console.log('NFT image failed:', '${imageUri}')" 
                     style="max-width: 200px;">
@@ -395,12 +395,25 @@ async function updateNFTDisplay(containerId, showButtons = true) {
         });
         console.log('[NFT Display] Generated HTML:', html);
         document.getElementById(containerId).innerHTML = html;
+
+        // Add event listeners for NFT cards
+        document.getElementById(containerId).querySelectorAll('.nft-card').forEach(card => {
+            card.addEventListener('click', (event) => {
+                const index = card.getAttribute('data-index');
+                showNFTModal(index, nfts);
+            });
+        });
     } else {
         document.getElementById(containerId).innerHTML = '<p>Error loading NFTs—try again!</p>';
     }
 }
 
-function showNFTModal(nft) {
+function showNFTModal(index, nfts) {
+    const nft = nfts[index];
+    if (!nft) {
+        console.error('[NFTModal] NFT not found at index:', index);
+        return;
+    }
     document.getElementById('nft-modal-title').textContent = nft.name;
     document.getElementById('nft-modal-image').src = nft.imageUri;
     document.getElementById('nft-modal-name').textContent = nft.name;
@@ -409,7 +422,7 @@ function showNFTModal(nft) {
     document.getElementById('nft-modal-stake-start').textContent = nft.stakeStart ? new Date(nft.stakeStart).toLocaleString() : 'N/A';
     document.getElementById('nft-modal-last-points').textContent = nft.lastPoints || 0;
     document.getElementById('nft-modal-timestamp').textContent = new Date().toLocaleString();
-    window.currentNFT = nft; // Store NFT data for sharing
+    window.currentNFT = nft;
     document.getElementById('nft-modal').style.display = 'block';
 }
 
