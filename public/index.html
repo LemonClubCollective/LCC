@@ -786,6 +786,75 @@
         <button onclick="shareNFTOnX()" style="margin-top: 20px; padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Share on X</button>
     </div>
 </div>
+<div id="evolve-confirm-modal" class="modal">
+    <div class="modal-content evolve-confirm-content">
+        <span class="close" onclick="closeEvolveConfirmModal()">×</span>
+        <h2>Ready to Evolve? 🍋</h2>
+        <p>Ready to squeeze 10 lemonade points to grow your NFT to the next juicy stage? Let’s evolve!</p>
+        <button onclick="confirmEvolve()" style="margin: 10px; padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Confirm</button>
+        <button onclick="closeEvolveConfirmModal()" style="margin: 10px; padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 10px; cursor: pointer;">Cancel</button>
+    </div>
+</div>
+
+<style>
+    .modal {
+        display: none !important;
+        position: fixed !important;
+        z-index: 50000 !important;
+        left: 0 !important;
+        top: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background-color: rgba(0, 0, 0, 0.5) !important;
+        visibility: visible !important;
+        opacity: 0 !important;
+        transition: opacity 0.3s ease-in-out !important;
+        overflow: auto !important;
+    }
+    .modal.active {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    .modal-content {
+        background-color: rgba(255, 250, 205, 0.95) !important;
+        margin: 15% auto !important;
+        padding: 20px !important;
+        border-radius: 15px !important;
+        width: 80% !important;
+        max-width: 500px !important;
+        text-align: center !important;
+        font-family: 'Chelsea Market', cursive !important;
+        color: #228b22 !important;
+        box-sizing: border-box !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+    }
+    .evolve-confirm-content {
+        animation: bounce 0.5s ease-in-out !important;
+    }
+    .modal-content p {
+        margin: 10px 0 !important;
+    }
+    .modal-content p strong {
+        color: #ff4500 !important;
+    }
+    .close {
+        color: #ff4500 !important;
+        float: right !important;
+        font-size: 28px !important;
+        cursor: pointer !important;
+    }
+    .close:hover {
+        color: #ffeb3b !important;
+    }
+    @keyframes bounce {
+        0% { transform: scale(0.8); opacity: 0; }
+        50% { transform: scale(1.05); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+</style>
     <div id="splash-page" class="active">
         <div class="splash-icon" style="top: 10%; left: 10%; width: 240px;">
             <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/townhall.png" alt="Town Hall">
