@@ -1340,6 +1340,9 @@ async function stakeNFT(mintAddress) {
 }
 
 
+let currentMintAddress = null;
+let currentButton = null;
+
 async function evolveNFT(mintAddress, button) {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect wallet to evolve!');
@@ -1350,15 +1353,31 @@ async function evolveNFT(mintAddress, button) {
         return;
     }
 
-
     const points = bigInt(lemonadePoints || 0);
     if (points.lt(10)) {
         alert('Need 10 Lemonade Points to evolve!');
         return;
     }
-    button.classList.add('loading');
+
+    // Store the mint address and button for confirmation
+    currentMintAddress = mintAddress;
+    currentButton = button;
+
+    // Show the confirmation modal
+    const modal = document.getElementById('evolve-confirm-modal');
+    if (modal) {
+        modal.classList.add('active');
+    } else {
+        console.error('[EvolveConfirm] Modal element not found');
+    }
+}
+
+async function confirmEvolve() {
+    if (!currentMintAddress || !currentButton) return;
+
+    currentButton.classList.add('loading');
     try {
-        const response = await fetch(`/evolve/${loggedInUsername}/${mintAddress}`, {
+        const response = await fetch(`/evolve/${loggedInUsername}/${currentMintAddress}`, {
             method: 'GET',
             credentials: 'include'
         });
@@ -1382,8 +1401,18 @@ async function evolveNFT(mintAddress, button) {
         console.error('[Evolve] Client Error:', error);
         alert('Failed to evolve NFT: ' + error.message);
     } finally {
-        button.classList.remove('loading');
+        currentButton.classList.remove('loading');
+        closeEvolveConfirmModal();
     }
+}
+
+function closeEvolveConfirmModal() {
+    const modal = document.getElementById('evolve-confirm-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    currentMintAddress = null;
+    currentButton = null;
 }
 
 
