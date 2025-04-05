@@ -7,15 +7,25 @@ const fsPromises = require('fs').promises;
 const fs = require('fs');
 const path = require('path');
 const splToken = require('@solana/spl-token');
-const stripe = require('stripe')('sk_test51Qxc9v03zQcNJCYZCY8NEg0wC8LHnCd1c8OiWeqsOPyHKzBponH5gObOzGOdRgMnbcx3nCEQuzatt53kIrC9ScoA0022Lt1WDy');
+const PRINTIFY_API_KEY = process.env.PRINTIFY_API_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzN2Q0YmQzMDM1ZmUxMWU5YTgwM2FiN2VlYjNjY2M5NyIsImp0aSI6Ijg3YTQ3MzhiZmI0NzhiY2ExZDNiMWFmMGM5ZTY5YWIzYjAzOTA0ZmJlM2UxYWZjMWJjNDY4MDAwZDMxYTY2ZDc4NzAwMGRmMGY5YWUyMjQ5IiwiaWF0IjoxNzQzODcyNzQ4LjA2NzM0NCwibmJmIjoxNzQzODcyNzQ4LjA2NzM0NiwiZXhwIjoxNzc1NDA4NzQ4LjA2MTEwNywic3ViIjoiMjE4ODI2ODciLCJzY29wZXMiOlsic2hvcHMubWFuYWdlIiwic2hvcHMucmVhZCIsImNhdGFsb2cucmVhZCIsIm9yZGVycy5yZWFkIiwib3JkZXJzLndyaXRlIiwicHJvZHVjdHMucmVhZCIsInByb2R1Y3RzLndyaXRlIiwid2ViaG9va3MucmVhZCIsIndlYmhvb2tzLndyaXRlIiwidXBsb2Fkcy5yZWFkIiwidXBsb2Fkcy53cml0ZSIsInByaW50X3Byb3ZpZGVycy5yZWFkIiwidXNlci5pbmZvIl19.AMjxZYWVfUY7vqyPEBkN-WLPpmvuAfWk6xIL-M4Biff1p5jKXfFNAcVpOOwAwIB5wLNJKWPSodegK-8ibco';
+const fetch = require('node-fetch');
+const stripe = require('stripe')('sk_test_51Qxc9v03zQcNJCYZCY8NEg0wC8LHnCd1c8OiWeqsOPyHKzBponH5gObOzGOdRgMnbcx3nCEQuzatt53kIrC9ScoA0022Lt1WDy');
 const CoinbaseCommerce = require('coinbase-commerce-node');
 const Client = CoinbaseCommerce.Client;
 Client.init('989417de-057c-4d9f-9a80-30b2f29b8198');
 const Charge = CoinbaseCommerce.resources.Charge;
+const paypal = require('@paypal/checkout-server-sdk');
+const paypalClient = new paypal.core.SandboxEnvironment(
+    'AbfNpdOzyVqcNYi9tFHQvn7uwSCf_Iq7KENUf1ULzBBDIrvSpsD3baWkb2JgoRhQ8Y7XmLcN9DdwRHVV',
+    'EJUcvE5xdxUNu4ZAHLcXyV6RtAAksheVNRo58XtSbcvH71g1nI3HEG66BP-hM01AFAW8bDe66Y5WoXwz'
+);
+const paypalClientInstance = new paypal.core.PayPalHttpClient(paypalClient);
+
 const multer = require('multer');
 const axios = require('axios');
 const { TOKEN_PROGRAM_ID: TokenProgramId, createInitializeMintInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createMintToInstruction, ASSOCIATED_TOKEN_PROGRAM_ID } = require('@solana/spl-token');
 const cors = require('cors');
+const crypto = require('crypto');
 const { exec } = require('child_process');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { MongoClient } = require('mongodb');
@@ -57,6 +67,7 @@ app.use(cors());
 // Increase request size limit for JSON and form-data
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
+
 
 
 app.post('/claim-quest/:username/:type/:questId', async (req, res) => {
@@ -1344,6 +1355,89 @@ app.get('/node_modules/big-integer/big-integer.js', (req, res) => {
     });
 });
 
+app.post('/printify-webhook', express.json(), async (req, res) => {
+    console.log('[Webhook] Received:', JSON.stringify(req.body, null, 2));
+    const event = req.body;
+
+    // Respond immediately to Printify
+    res.sendStatus(200);
+
+    if (event.type === 'product:publish:started') {
+        const shopId = event.resource.data.shop_id;
+        const productId = event.resource.id;
+        console.log(`[Webhook] Publishing started for product ${productId} in shop ${shopId}`);
+
+        const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'; // Your token
+        const maxRetries = 3;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}/publishing_succeeded.json`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${printifyApiToken}`,
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'LemonClubCollective/1.0'
+                    },
+                    body: JSON.stringify({
+                        external: { id: `EXT-${productId}`, handle: `product-${productId}` }
+                    })
+                });
+                const data = await response.json();
+                console.log(`[Webhook] Attempt ${attempt} - Status: ${response.status}`, data);
+                if (response.ok) {
+                    console.log(`[Webhook] Product ${productId} published successfully`);
+                    break;
+                } else {
+                    console.error(`[Webhook] Attempt ${attempt} failed:`, data);
+                    if (attempt === maxRetries) {
+                        console.error(`[Webhook] Max retries reached for ${productId}`);
+                    }
+                }
+            } catch (error) {
+                console.error(`[Webhook] Attempt ${attempt} error:`, error.message);
+                if (attempt === maxRetries) {
+                    console.error(`[Webhook] Failed after ${maxRetries} attempts for ${productId}`);
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+        }
+    } else {
+        console.log(`[Webhook] Unhandled event type: ${event.type}`);
+    }
+});
+
+app.get('/printify-products', async (req, res) => {
+    console.log('[Printify] Starting product fetch...');
+    try {
+        const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzN2Q0YmQzMDM1ZmUxMWU5YTgwM2FiN2VlYjNjY2M5NyIsImp0aSI6Ijg3YTQ3MzhiZmI0NzhiY2ExZDNiMWFmMGM5ZTY5YWIzYjAzOTA0ZmJlM2UxYWZjMWJjNDY4MDAwZDMxYTY2ZDc4NzAwMGRmMGY5YWUyMjQ5IiwiaWF0IjoxNzQzODcyNzQ4LjA2NzM0NCwibmJmIjoxNzQzODcyNzQ4LjA2NzM0NiwiZXhwIjoxNzc1NDA4NzQ4LjA2MTEwNywic3ViIjoiMjE4ODI2ODciLCJzY29wZXMiOlsic2hvcHMubWFuYWdlIiwic2hvcHMucmVhZCIsImNhdGFsb2cucmVhZCIsIm9yZGVycy5yZWFkIiwib3JkZXJzLndyaXRlIiwicHJvZHVjdHMucmVhZCIsInByb2R1Y3RzLndyaXRlIiwid2ViaG9va3MucmVhZCIsIndlYmhvb2tzLndyaXRlIiwidXBsb2Fkcy5yZWFkIiwidXBsb2Fkcy53cml0ZSIsInByaW50X3Byb3ZpZGVycy5yZWFkIiwidXNlci5pbmZvIl19.AMjxZYWVfUY7vqyPEBkN-WLPpmvuAfWk6xIL-M4Biff1p5jKXfFNAcVpOOwAwIB5wLNJKWPSodegK-8ibco';
+        const shopId = '21660074';
+        console.log('[Printify] Using Shop ID:', shopId);
+        const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/products.json`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await response.json();
+        console.log('[Printify] Raw response status:', response.status);
+        console.log('[Printify] Raw response data:', JSON.stringify(data));
+        
+        if (!response.ok) {
+            console.error('[Printify] Error fetching products:', response.status, data);
+            if (response.status === 404) {
+                return res.json({ success: true, products: [], message: 'No products published yet' });
+            }
+            return res.status(response.status).json({ success: false, error: 'Failed to fetch products', details: data });
+        }
+        
+        console.log('[Printify] Fetched products:', data.data);
+        res.json({ success: true, products: data.data || [] });
+    } catch (error) {
+        console.error('[Printify] Fetch error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to fetch products', details: error.message });
+    }
+});
 
 // server.js, replace /delete-video (around line 2678+)
 app.post('/delete-video', async (req, res) => {
@@ -1386,6 +1480,164 @@ app.post('/delete-video', async (req, res) => {
     }
 });
 
+app.post('/printify-order', async (req, res) => {
+    try {
+        const { username, productId, variantId, address } = req.body;
+        if (!username || !productId || !variantId || !address) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+        const [firstName, ...lastNameParts] = fullName.split(' ');
+        const lastName = lastNameParts.join(' ');
+
+        const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...';
+        const shopId = '21660074';
+
+        const orderData = {
+            line_items: [{
+                product_id: productId,
+                variant_id: variantId,
+                quantity: 1
+            }],
+            shipping_method: 'STANDARD',
+            send_shipping_notification: true,
+            address_to: {
+                first_name: firstName,
+                last_name: lastName || '',
+                email: user.email,
+                phone: 'N/A',
+                country: country,
+                region: state,
+                address1: street,
+                address2: '',
+                city: city,
+                zip: zip
+            }
+        };
+
+        const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+        });
+        const orderResult = await orderResponse.json();
+        console.log('[PrintifyOrder] Response:', orderResult);
+
+        if (!orderResponse.ok) {
+            throw new Error(orderResult.errors?.reason || 'Failed to create order');
+        }
+
+        res.json({ success: true, orderId: orderResult.id });
+    } catch (error) {
+        console.error('[PrintifyOrder] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Existing /create-charge endpoint (added previously)
+app.post('/create-charge', async (req, res) => {
+    try {
+        const { username, amount } = req.body;
+        if (!username || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const chargeData = {
+            name: 'Lemon Club Merch Purchase',
+            description: `Purchase for ${username}`,
+            pricing_type: 'fixed_price',
+            local_price: { amount: amount.toFixed(2), currency: 'USD' },
+            metadata: { username }
+        };
+        const charge = await Charge.create(chargeData);
+        res.json({ success: true, chargeUrl: charge.hosted_url });
+    } catch (error) {
+        console.error('[CreateCharge] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add Stripe endpoint
+app.post('/create-stripe-checkout', async (req, res) => {
+    try {
+        const { username, amount } = req.body;
+        if (!username || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [{
+                price_data: {
+                    currency: 'usd',
+                    product_data: { name: 'Lemon Club Merch Purchase' },
+                    unit_amount: Math.round(amount * 100) // Convert to cents
+                },
+                quantity: 1
+            }],
+            mode: 'payment',
+            success_url: `http://localhost:8080/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `http://localhost:8080/cancel`,
+            metadata: { username }
+        });
+
+        res.json({ success: true, url: session.url });
+    } catch (error) {
+        console.error('[CreateStripeCheckout] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add PayPal endpoint
+app.post('/create-paypal-order', async (req, res) => {
+    try {
+        const { username, amount } = req.body;
+        if (!username || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const request = new paypal.orders.OrdersCreateRequest();
+        request.prefer("return=representation");
+        request.requestBody({
+            intent: 'CAPTURE',
+            purchase_units: [{
+                amount: {
+                    currency_code: 'USD',
+                    value: amount.toFixed(2)
+                },
+                description: `Lemon Club Merch Purchase for ${username}`
+            }],
+            application_context: {
+                return_url: 'http://localhost:8080/success',
+                cancel_url: 'http://localhost:8080/cancel'
+            }
+        });
+
+        const order = await paypalClientInstance.execute(request);
+        const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
+
+        res.json({ success: true, url: approvalUrl });
+    } catch (error) {
+        console.error('[CreatePayPalOrder] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 /// server.js, replace /delete-blog (around your line 2678+)
 app.post('/delete-blog', async (req, res) => {
@@ -2524,6 +2776,105 @@ app.post('/store/purchase/:username/:itemId', async (req, res) => {
     }
 });
 
+app.post('/create-stripe-checkout', async (req, res) => {
+    try {
+        const { username, amount } = req.body;
+        if (!username || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [{
+                price_data: {
+                    currency: 'usd',
+                    product_data: { name: 'Lemon Club Merch Purchase' },
+                    unit_amount: Math.round(amount * 100) // Convert to cents
+                },
+                quantity: 1
+            }],
+            mode: 'payment',
+            success_url: `http://localhost:8080/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `http://localhost:8080/cancel`,
+            metadata: { username }
+        });
+
+        res.json({ success: true, url: session.url });
+    } catch (error) {
+        console.error('[CreateStripeCheckout] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/create-paypal-order', async (req, res) => {
+    try {
+        const { username, amount } = req.body;
+        if (!username || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const request = new paypal.orders.OrdersCreateRequest();
+        request.prefer("return=representation");
+        request.requestBody({
+            intent: 'CAPTURE',
+            purchase_units: [{
+                amount: {
+                    currency_code: 'USD',
+                    value: amount.toFixed(2)
+                },
+                description: `Lemon Club Merch Purchase for ${username}`
+            }],
+            application_context: {
+                return_url: 'http://localhost:8080/success',
+                cancel_url: 'http://localhost:8080/cancel'
+            }
+        });
+
+        const order = await paypalClient.execute(request);
+        const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
+
+        res.json({ success: true, url: approvalUrl });
+    } catch (error) {
+        console.error('[CreatePayPalOrder] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/create-sol-transaction', async (req, res) => {
+    try {
+        const { userWallet, amount } = req.body;
+        if (!userWallet || !amount) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const userPubkey = new PublicKey(userWallet);
+        const lamports = Math.round(amount * solanaWeb3.LAMPORTS_PER_SOL); // Convert USD to SOL (approx)
+
+        const transaction = new solanaWeb3.Transaction().add(
+            solanaWeb3.SystemProgram.transfer({
+                fromPubkey: userPubkey,
+                toPubkey: wallet.publicKey, // Server wallet
+                lamports: lamports
+            })
+        );
+
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = userPubkey;
+
+        const serializedTx = transaction.serialize({ requireAllSignatures: false });
+        res.json({ success: true, transaction: Buffer.from(serializedTx).toString('base64') });
+    } catch (error) {
+        console.error('[CreateSolTransaction] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
 
 app.post('/apply-water/:username/:mintAddress', async (req, res) => {
     try {
@@ -2699,8 +3050,6 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
         res.status(500).json({ error: 'Failed to update user permissions: ' + error.message });
     }
 });
-
-
 
 
 async function setLeviAsAdmin() {
