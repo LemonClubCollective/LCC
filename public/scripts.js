@@ -320,35 +320,295 @@ function disconnectWallet() {
 
 
 async function loadProducts() {
-    const response = await fetch('https://lemonclub-env2.us-east-1.elasticbeanstalk.com/api/printify-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-    });
-    const data = await response.json();
-    if (response.ok && data.success && data.data.length > 0) {
-        let html = '';
-        data.data.forEach(product => {
-            // Escape quotes in product.title to avoid breaking the string
-            const safeTitle = product.title.replace(/"/g, '&quot;');
-            html += `<div class="nft-card"><img id="product-img-${product.id}" alt="${safeTitle}" style="max-width: 200px;"><p>${safeTitle} - $${product.variants[0].price / 100}</p><button onclick="buyMerch('${product.id}', ${product.variants[0].price / 100})">Buy with Crypto</button></div>`;
+    console.log('[loadProducts] Fetching Printify products...');
+    try {
+        const response = await fetch('/printify-products', {
+            method: 'GET',
+            credentials: 'include'
         });
-        document.getElementById('product-list').innerHTML = html;
+        const data = await response.json();
+        console.log('[loadProducts] Response:', data);
 
+        const productList = document.getElementById('store-products');
+        if (!productList) {
+            console.error('[loadProducts] Element #store-products not found in DOM');
+            return;
+        }
 
-        data.data.forEach(product => {
-            const img = document.getElementById(`product-img-${product.id}`);
-            if (product.images && product.images[0] && product.images[0].src) {
-                img.src = product.images[0].src;
-            } else {
-                img.src = 'https://via.placeholder.com/200';
-            }
-        });
-    } else {
-        document.getElementById('product-list').innerHTML = `<p>${data.message || 'No products available yet'}</p>`;
+        if (response.ok && data.success && data.products && data.products.length > 0) {
+            let html = '';
+            data.products.forEach(product => {
+                const safeTitle = product.title.replace(/"/g, '"');
+                html += `<div class="product-card" onclick="showProductModal('${product.id}')"><img id="product-img-${product.id}" alt="${safeTitle}" style="max-width: 150px; border-radius: 10px;"><p>${safeTitle}</p><p>$${product.variants[0].price / 100}</p></div>`;
+            });
+            productList.innerHTML = html;
+
+            data.products.forEach(product => {
+                const img = document.getElementById(`product-img-${product.id}`);
+                if (img && product.images && product.images[0] && product.images[0].src) {
+                    img.src = product.images[0].src;
+                    console.log('[loadProducts] Set image for', product.id, 'to', img.src);
+                } else {
+                    if (img) img.src = 'https://via.placeholder.com/150';
+                    console.log('[loadProducts] No image for', product.id, 'using placeholder');
+                }
+            });
+            window.printifyProducts = data.products; // Store products globally for modal
+        } else {
+            productList.innerHTML = `<p>${data.message || 'No products available yet'}</p>`;
+            console.log('[loadProducts] No products:', data.message);
+        }
+    } catch (error) {
+        console.error('[loadProducts] Error:', error.message);
+        if (productList) productList.innerHTML = '<p>Error loading products—try again!</p>';
     }
 }
 
+function showProductModal(productId) {
+    const product = window.printifyProducts.find(p => p.id === productId);
+    if (!product) {
+        console.error('[ProductModal] Product not found:', productId);
+        return;
+    }
+
+    const modal = document.getElementById('product-modal');
+    if (!modal) {
+        console.error('[ProductModal] Modal element not found');
+        return;
+    }
+
+    document.getElementById('product-modal-title').textContent = product.title;
+    document.getElementById('product-modal-image').src = product.images[0]?.src || 'https://via.placeholder.com/300';
+    document.getElementById('product-modal-description').innerHTML = product.description;
+    document.getElementById('product-modal-price').textContent = `$${product.variants[0].price / 100}`;
+
+    let optionsHtml = '';
+    const defaultVariant = product.variants[0];
+    product.options.forEach((option, optIndex) => {
+        optionsHtml += `<label>${option.name}: <select id="option-${option.name.replace(/\s+/g, '-')}" onchange="updatePrice('${productId}')">`;
+        const defaultOptionId = defaultVariant.options[optIndex];
+        option.values.forEach(val => {
+            const isValid = product.variants.some(v => v.options[optIndex] === val.id);
+            if (isValid) {
+                optionsHtml += `<option value="${val.id}" ${val.id === defaultOptionId ? 'selected' : ''}>${val.title}</option>`;
+            }
+        });
+        optionsHtml += '</select></label><br>';
+    });
+    document.getElementById('product-modal-options').innerHTML = optionsHtml;
+
+    window.currentProductId = productId;
+    modal.classList.add('active');
+}
+
+function closeProductModal() {
+    const modal = document.getElementById('product-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function closeCheckoutModal() {
+    const modal = document.getElementById('checkout-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+
+function updatePrice(productId) {
+    const product = window.printifyProducts.find(p => p.id === productId);
+    if (!product) {
+        console.error('[UpdatePrice] Product not found:', productId);
+        return;
+    }
+
+    const selectedOptions = product.options.map(opt => {
+        const select = document.getElementById(`option-${opt.name.replace(/\s+/g, '-')}`);
+        return parseInt(select.value);
+    });
+
+    console.log('[UpdatePrice] Selected options:', selectedOptions);
+
+    const variant = product.variants.find(v => {
+        console.log('[UpdatePrice] Checking variant options:', v.options);
+        return v.options.every((optId, i) => optId === selectedOptions[i]);
+    });
+
+    if (!variant) {
+        console.error('[UpdatePrice] No matching variant found for options:', selectedOptions);
+        return;
+    }
+
+    document.getElementById('product-modal-price').textContent = `$${variant.price / 100}`;
+}
+
+function startCheckout() {
+    closeProductModal();
+    const modal = document.getElementById('checkout-modal');
+    if (!modal) {
+        console.error('[CheckoutModal] Modal element not found');
+        return;
+    }
+
+    const product = window.printifyProducts.find(p => p.id === window.currentProductId);
+    if (!product) {
+        console.error('[StartCheckout] Product not found:', window.currentProductId);
+        return;
+    }
+
+    const selectedOptions = product.options.map(opt => {
+        const select = document.getElementById(`option-${opt.name.replace(/\s+/g, '-')}`);
+        return parseInt(select.value);
+    });
+
+    console.log('[StartCheckout] Selected options:', selectedOptions);
+
+    let variant = product.variants.find(v => 
+        v.options.every((optId, i) => optId === selectedOptions[i])
+    );
+
+    if (!variant) {
+        console.warn('[StartCheckout] No matching variant found for options:', selectedOptions);
+        variant = product.variants[0]; // Fallback to the first variant
+        console.log('[StartCheckout] Falling back to first variant:', variant);
+    }
+
+    document.getElementById('checkout-total').textContent = `Total: $${variant.price / 100}`;
+    window.currentVariantId = variant.id;
+    window.currentPrice = variant.price / 100;
+    updatePaymentFields();
+    modal.classList.add('active');
+}
+
+function updatePaymentFields() {
+    const method = document.getElementById('payment-method').value;
+    const fieldsDiv = document.getElementById('payment-fields');
+    fieldsDiv.innerHTML = '';
+    if (method === 'stripe') {
+        fieldsDiv.innerHTML = `<p>Proceed to Stripe checkout after clicking "Complete Purchase".</p>`;
+    } else if (method === 'paypal') {
+        fieldsDiv.innerHTML = `<p>Proceed to PayPal checkout after clicking "Complete Purchase".</p>`;
+    } else if (method === 'sol') {
+        fieldsDiv.innerHTML = `<p>Pay with SOL using your connected wallet.</p>`;
+    } else {
+        fieldsDiv.innerHTML = `<p>Proceed to Coinbase checkout after clicking "Complete Purchase".</p>`;
+    }
+}
+
+async function completePurchase() {
+    if (!loggedInUsername) {
+        alert('Please login to buy merch!');
+        return;
+    }
+
+    const shipping = {
+        firstName: document.getElementById('checkout-first-name').value.trim(),
+        lastName: document.getElementById('checkout-last-name').value.trim(),
+        email: document.getElementById('checkout-email').value.trim(),
+        street: document.getElementById('checkout-street').value.trim(),
+        city: document.getElementById('checkout-city').value.trim(),
+        state: document.getElementById('checkout-state').value.trim(),
+        zip: document.getElementById('checkout-zip').value.trim(),
+        country: document.getElementById('checkout-country').value.trim()
+    };
+
+    if (Object.values(shipping).some(v => !v)) {
+        alert('Please fill all shipping fields!');
+        return;
+    }
+
+    const method = document.getElementById('payment-method').value;
+    const address = `${shipping.firstName} ${shipping.lastName}, ${shipping.street}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
+
+    try {
+        let paymentResult;
+        if (method === 'coinbase') {
+            if (!walletAddress) {
+                alert('Connect Solana wallet to pay with crypto!');
+                return;
+            }
+            const chargeResponse = await fetch('/create-charge', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: loggedInUsername, amount: window.currentPrice }),
+                credentials: 'include'
+            });
+            paymentResult = await chargeResponse.json();
+            if (!chargeResponse.ok || !paymentResult.success) {
+                throw new Error(paymentResult.error || 'Failed to create charge');
+            }
+            window.open(paymentResult.chargeUrl, '_blank');
+        } else if (method === 'stripe') {
+            const stripeResponse = await fetch('/create-stripe-checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: loggedInUsername, amount: window.currentPrice }),
+                credentials: 'include'
+            });
+            paymentResult = await stripeResponse.json();
+            if (!stripeResponse.ok || !paymentResult.success) {
+                throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
+            }
+            window.open(paymentResult.url, '_blank');
+            return;
+        } else if (method === 'paypal') {
+            const paypalResponse = await fetch('/create-paypal-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: loggedInUsername, amount: window.currentPrice }),
+                credentials: 'include'
+            });
+            paymentResult = await paypalResponse.json();
+            if (!paypalResponse.ok || !paymentResult.success) {
+                throw new Error(paymentResult.error || 'Failed to create PayPal order');
+            }
+            window.open(paymentResult.url, '_blank');
+            return;
+        } else if (method === 'sol') {
+            if (!walletAddress) {
+                alert('Connect Solana wallet to pay with SOL!');
+                return;
+            }
+            const solResponse = await fetch('/create-sol-transaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    userWallet: walletAddress, 
+                    amount: window.currentPrice 
+                }),
+                credentials: 'include'
+            });
+            paymentResult = await solResponse.json();
+            if (!solResponse.ok || !paymentResult.success) {
+                throw new Error(paymentResult.error || 'Failed to create SOL transaction');
+            }
+
+            const transaction = solanaWeb3.Transaction.from(Buffer.from(paymentResult.transaction, 'base64'));
+            const signature = await window.solana.signAndSendTransaction(transaction);
+            await solanaWeb3.connection.confirmTransaction(signature);
+            alert('SOL payment successful! Signature: ' + signature);
+        }
+
+        const orderResponse = await fetch('/printify-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                username: loggedInUsername, 
+                productId: window.currentProductId, 
+                variantId: window.currentVariantId,
+                address: address
+            }),
+            credentials: 'include'
+        });
+        const orderResult = await orderResponse.json();
+        if (orderResult.success) {
+            alert('Order placed! ID: ' + orderResult.orderId);
+            document.getElementById('checkout-modal').classList.remove('active');
+        } else {
+            throw new Error(orderResult.error || 'Failed to place order');
+        }
+    } catch (error) {
+        console.error('[CompletePurchase] Error:', error.message);
+        alert('Failed to complete purchase: ' + error.message);
+    }
+}
 
 async function updateNFTDisplay(containerId, showButtons = true) {
     console.log('[NFTDisplay] Starting update for container:', containerId);
@@ -1161,48 +1421,68 @@ async function updateAdminDisplay() {
 
 async function showContent(sectionId) {
     console.log(`showContent called with: ${sectionId}`);
-    if ((sectionId === 'profile' || sectionId === 'videos' || sectionId === 'staking' || sectionId === 'admin') && !loggedInUsername) {
-        sectionId = 'home';
-    }
-    document.querySelectorAll('.content').forEach(content => content.classList.remove('active'));
-    const contentElement = document.getElementById(sectionId);
+
+    const restrictedSections = ['profile', 'videos', 'staking', 'admin'];
+    const isRestricted = restrictedSections.includes(sectionId);
+    const finalSectionId = (isRestricted && !loggedInUsername) ? 'home' : sectionId;
+
+    document.querySelectorAll('.content').forEach(content => 
+        content.classList.remove('active')
+    );
+    const contentElement = document.getElementById(finalSectionId);
     if (contentElement) {
         contentElement.classList.add('active');
         document.getElementById('splash-page').style.display = 'none';
         document.getElementById('main-site').style.display = 'block';
-        if (sectionId === 'staking' && loggedInUsername) {
-            await updateNFTDisplay('nft-info');
-        } else if (sectionId === 'forum') {
-            updatePostsDisplay();
-        } else if (sectionId === 'quests') {
-            updateQuestsDisplay();
-        } else if (sectionId === 'profile' && loggedInUsername) {
-            updateProfileDisplay();
-        } else if (sectionId === 'store') {
-            loadProducts();
-        } else if (sectionId === 'blog') {
-            updateBlogPosts();
-        } else if (sectionId === 'videos' && loggedInUsername) {
-            updateVideoList();
-        } else if (sectionId === 'admin' && loggedInUsername) {
-            updateAdminDisplay();
+
+        const sectionUpdates = {
+            'staking': () => loggedInUsername && updateNFTDisplay('nft-info'),
+            'forum': () => updatePostsDisplay(),
+            'quests': () => updateQuestsDisplay(),
+            'profile': () => loggedInUsername && updateProfileDisplay(),
+            'store': () => loadProducts(), // Already correct
+            'blog': () => updateBlogPosts(),
+            'videos': () => loggedInUsername && updateVideoList(),
+            'admin': () => loggedInUsername && updateAdminDisplay()
+        };
+
+        if (sectionUpdates[finalSectionId]) {
+            await sectionUpdates[finalSectionId]();
         }
     }
 
-
-    if (sectionId !== 'friends') stopAllGameTimers();
-    document.querySelectorAll('.building').forEach(building => building.classList.remove('active'));
-    const activeBuilding = document.getElementById(`building-${sectionId}`);
-    if (activeBuilding) activeBuilding.classList.add('active');
-    const menuContainer = document.getElementById('menu-container');
-    if (sectionId === 'what-is-lcc') {
-        menuContainer.classList.remove('active');
-    } else {
-        menuContainer.classList.add('active');
+    // Handle game timers
+    if (finalSectionId !== 'friends') {
+        stopAllGameTimers();
     }
-    if (loggedInUsername && sectionId !== 'quests') trackSectionVisit(sectionId);
-}
 
+    // Manage building highlights
+    document.querySelectorAll('.building').forEach(building => 
+        building.classList.remove('active')
+    );
+    const activeBuilding = document.getElementById(`building-${finalSectionId}`);
+    if (activeBuilding) {
+        activeBuilding.classList.add('active');
+    }
+
+    // Menu container visibility
+    const menuContainer = document.getElementById('menu-container');
+    if (menuContainer) {
+        menuContainer.classList.toggle('active', finalSectionId !== 'what-is-lcc');
+    }
+
+    // Track section visit
+    if (loggedInUsername && finalSectionId !== 'quests') {
+        trackSectionVisit(finalSectionId);
+    }
+
+    // Handle email verification
+    const urlParams = new URLSearchParams(window.location.search);
+    if (finalSectionId === 'home' && urlParams.get('verified') === 'true') {
+        alert('Email verified successfully! Please sign in to continue.');
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
 
 function toggleAuth() {
     if (loggedInUsername) logout();
@@ -1443,6 +1723,58 @@ function closeEvolveConfirmModal() {
             }
         }
 
+async function updateStoreDisplay() {
+    console.log('[Store] Starting updateStoreDisplay');
+    const storeProducts = document.getElementById('product-list');
+    if (!storeProducts) {
+        console.error('[Store] Product list element not found');
+        return;
+    }
+    if (!loggedInUsername) {
+        console.log('[Store] User not logged in');
+        storeProducts.innerHTML = '<p>Please login to view the store!</p>';
+        return;
+    }
+
+    try {
+        console.log('[Store] Fetching products from /printify-products');
+        const response = await fetch(`/printify-products`);
+        const data = await response.json();
+        console.log('[Store] Response from /printify-products:', data);
+        console.log('[Store] Response status:', response.status);
+        if (!response.ok || !data.success) {
+            storeProducts.innerHTML = '<p>Error loading products—try again!</p>';
+            console.error('[Store] Error:', data.error || response.statusText, data.details);
+            return;
+        }
+
+        const products = data.products || [];
+        console.log('[Store] Products received:', products);
+        let html = products.length ? '' : '<p>No products available—check back soon!</p>';
+        products.forEach(product => {
+            const price = product.variants[0]?.price / 100 || 0; // Convert cents to dollars
+            html += `
+                <div class="product-card">
+                    <img src="${product.images[0]?.src || 'https://via.placeholder.com/150'}" alt="${product.title}" style="max-width: 150px; border-radius: 10px;">
+                    <p>${product.title}</p>
+                    <p>$${price.toFixed(2)}</p>
+                    <button onclick="buyMerch('${product.id}', ${price})">Buy Now</button>
+                </div>
+            `;
+        });
+        storeProducts.innerHTML = html;
+    } catch (error) {
+        console.error('[Store] Error:', error.message);
+        storeProducts.innerHTML = '<p>Error loading products—try again!</p>';
+    }
+}
+
+
+// Placeholder for buyMerch (we'll implement this in the next step)
+function buyMerch(productId, price) {
+    alert(`Buying product ${productId} for $${price.toFixed(2)} - Payment integration coming soon!`);
+}
+
 
        async function subscribeNewsletter() {
     const email = document.getElementById('newsletter-email').value.trim();
@@ -1669,60 +2001,51 @@ async function toggleWalletConnection() {
 }
 
 
-async function loadProducts() {
-    const response = await fetch(`/printify-products`, { // Fixed URL syntax
-        method: 'GET',
-        credentials: 'include'
-    });
-    const data = await response.json();
-    if (response.ok && data.success && data.data.length > 0) {
-        let html = '';
-        data.data.forEach(product => {
-            html += `<div class="nft-card"><img id="product-img-${product.id}" alt="${product.title}" style="max-width: 200px;"><p>${product.title} - $${product.variants[0].price / 100}</p><button onclick="buyMerch('${product.id}', ${product.variants[0].price / 100})">Buy with Crypto</button></div>`;
-        });
-        document.getElementById('product-list').innerHTML = html;
-
-
-        data.data.forEach(product => {
-            const img = document.getElementById(`product-img-${product.id}`);
-            if (product.images && product.images[0] && product.images[0].src) {
-                img.src = product.images[0].src;
-            } else {
-                img.src = 'https://via.placeholder.com/200';
-            }
-        });
-    } else {
-        document.getElementById('product-list').innerHTML = `<p>${data.message || 'No products available yet'}</p>`;
-    }
-}
-
-
         async function buyMerch(productId, price) {
     if (!walletAddress) {
         alert('Connect Solana wallet to buy!');
         return;
     }
+    if (!loggedInUsername) {
+        alert('Please login to buy merch!');
+        return;
+    }
+
     const address = prompt('Enter shipping address (name, street, city, state, zip, country):');
     if (!address) return;
-    const chargeResponse = await fetch(`/create-charge`, { // Fixed URL syntax
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: loggedInUsername, amount: price }),
-        credentials: 'include'
-    });
-    const chargeResult = await chargeResponse.json();
-    if (chargeResponse.ok && chargeResult.success) {
+
+    try {
+        // Step 1: Create a Coinbase charge
+        const chargeResponse = await fetch('/create-charge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: loggedInUsername, amount: price }),
+            credentials: 'include'
+        });
+        const chargeResult = await chargeResponse.json();
+        if (!chargeResponse.ok || !chargeResult.success) {
+            throw new Error(chargeResult.error || 'Failed to create charge');
+        }
+
+        // Step 2: Open Coinbase payment window
         window.open(chargeResult.chargeUrl, '_blank');
-        const orderResponse = await fetch(`/printify-order`, { // Fixed URL syntax
+
+        // Step 3: Place Printify order after payment (assuming payment succeeds)
+        const orderResponse = await fetch('/printify-order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: loggedInUsername, productId, address }),
             credentials: 'include'
         });
         const orderResult = await orderResponse.json();
-        if (orderResult.success) alert('Order placed! ID: ' + orderResult.orderId);
-    } else {
-        alert(chargeResult.error || 'Failed to create charge');
+        if (orderResult.success) {
+            alert('Order placed! ID: ' + orderResult.orderId);
+        } else {
+            throw new Error(orderResult.error || 'Failed to place order');
+        }
+    } catch (error) {
+        console.error('[BuyMerch] Error:', error.message);
+        alert('Failed to complete purchase: ' + error.message);
     }
 }
 

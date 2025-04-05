@@ -762,13 +762,45 @@
             padding: 15px 30px;
             font-size: 18px;
         }
+#store-products {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+}
+.product-card {
+    display: inline-block;
+    margin: 10px;
+    padding: 10px;
+    background-color: rgba(255, 250, 205, 0.95);
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+.product-card img {
+    max-width: 150px;
+    border-radius: 10px;
+}
+.product-card p {
+    margin: 5px 0;
+    color: #228b22;
+}
+.product-card button {
+    padding: 5px 10px;
+    background: linear-gradient(45deg, #ffeb3b, #ff4500);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: 'Chelsea Market', cursive;
+}
     </style>
 </head>
 <body>
 <body>
    <div id="nft-modal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="closeNFTModal()">×</span>
+        <span class="close" onclick="document.getElementById('checkout-modal').classList.remove('active')">×</span>
         <h2 id="nft-modal-title"></h2>
         <img id="nft-modal-image" src="" alt="NFT Image" style="max-width: 200px; border-radius: 10px;">
         <p><strong>Description:</strong> <span id="nft-modal-description"></span></p>
@@ -795,7 +827,112 @@
         <button onclick="closeEvolveConfirmModal()" style="margin: 10px; padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 10px; cursor: pointer;">Cancel</button>
     </div>
 </div>
+<div id="product-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeProductModal()">×</span>
+        <h2 id="product-modal-title"></h2>
+        <img id="product-modal-image" src="" alt="Product Image" style="max-width: 300px; border-radius: 10px;">
+        <p id="product-modal-description"></p>
+        <div id="product-modal-options"></div>
+        <p id="product-modal-price"></p>
+        <button onclick="startCheckout()" style="margin-top: 20px; padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Proceed to Checkout</button>
+    </div>
+</div>
+<div id="checkout-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeCheckoutModal()">×</span>
+        <h2>Checkout</h2>
+        <form id="checkout-form">
+            <label>First Name: <input type="text" id="checkout-first-name" required></label><br>
+            <label>Last Name: <input type="text" id="checkout-last-name" required></label><br>
+            <label>Email: <input type="email" id="checkout-email" required></label><br>
+            <label>Street Address: <input type="text" id="checkout-street" required></label><br>
+            <label>City: <input type="text" id="checkout-city" required></label><br>
+            <label>State: <input type="text" id="checkout-state" required></label><br>
+            <label>ZIP Code: <input type="text" id="checkout-zip" required></label><br>
+            <label>Country: <input type="text" id="checkout-country" required></label><br>
+            <label>Payment Method:
+                <select id="payment-method" onchange="updatePaymentFields()">
+                    <option value="coinbase">Crypto (Coinbase)</option>
+                    <option value="stripe">Credit Card (Stripe)</option>
+                    <option value="paypal">PayPal</option>
+		    <option value="sol">Pay with SOL</option>
+                </select>
+            </label><br>
+            <div id="payment-fields"></div>
+            <p id="checkout-total"></p>
+            <button type="button" onclick="completePurchase()" style="padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Complete Purchase</button>
+        </form>
+    </div>
+</div>
 
+<style>
+    #checkout-modal.modal {
+        display: none;
+        position: fixed;
+        z-index: 50000;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+        overflow: auto;
+    }
+    #checkout-modal.modal.active {
+        display: block;
+        opacity: 1;
+    }
+    #checkout-modal .modal-content {
+        background-color: rgba(255, 250, 205, 0.95);
+        margin: 10% auto;
+        padding: 20px;
+        border-radius: 15px;
+        width: 90%;
+        max-width: 500px;
+        text-align: center;
+        color: #228b22;
+    }
+    #checkout-form label {
+        display: block;
+        margin: 10px 0;
+    }
+    #checkout-form input {
+        width: 80%;
+        padding: 5px;
+    }
+</style>
+<style>
+    #product-modal.modal {
+        display: none;
+        position: fixed;
+        z-index: 50000;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+        overflow: auto;
+    }
+    #product-modal.modal.active {
+        display: block;
+        opacity: 1;
+    }
+    #product-modal .modal-content {
+        background-color: rgba(255, 250, 205, 0.95);
+        margin: 10% auto;
+        padding: 20px;
+        border-radius: 15px;
+        width: 90%;
+        max-width: 600px;
+        text-align: center;
+        color: #228b22;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+</style>
 <style>
     .modal {
         display: none !important;
@@ -950,10 +1087,10 @@
                         <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/blog.png" alt="Blog">
                         <div class="building-label">Blog</div>
                     </div>
-                    <div class="building shop" id="building-store" onclick="showContent('store')" data-tooltip="Buy Merch">
-                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/shop.png" alt="Store">
-                        <div class="building-label">Store</div>
-                    </div>
+                  <div class="building shop" id="building-store" onclick="showContent('store')" data-tooltip="Buy Merch">
+    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/shop.png" alt="Store">
+    <div class="building-label">Store</div>
+</div>
                     <div class="building" id="building-forum" onclick="showContent('forum')" data-tooltip="Join Forum">
                         <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/forum.png" alt="Forum">
                         <div class="building-label">Forum</div>
@@ -1416,7 +1553,7 @@
                         </a>
                     </div>
                 </div>
-                <div id="product-list"></div>
+                 <div id="store-products"></div>
             </div>
             <div id="videos" class="content">
                 <div class="content-header">
@@ -1540,15 +1677,5 @@
    <script src="/solana-web3.js" onload="window.solanaWeb3 = window.solanaWeb3 || {}; window.solanaWeb3Loaded = true; console.log('Solana Web3 loaded locally, version:', solanaWeb3.version || 'unknown')" onerror="console.error('Failed to load Solana Web3 locally:', event)"></script>
     <script src="/node_modules/big-integer/big-integer.js" onload="console.log('bigInt loaded locally'); window.BigInteger = bigInt;" onerror="console.error('bigInt load failed');"></script>
        <script src="/scripts.js" defer></script>
- <script>
-        document.getElementById('grow-lemons-btn').addEventListener('click', () => {
-            if (typeof showContent === 'function') {
-                showContent('what-is-lcc');
-            } else {
-                console.error('showContent not defined yet—waiting...');
-                setTimeout(() => showContent('what-is-lcc'), 500); // Retry after 500ms
-            }
-        });
-    </script>
 </body>
 </html>
