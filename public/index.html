@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,7 +7,7 @@
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
     <link href="https://fonts.googleapis.com/css2?family=Chelsea+Market&display=swap" rel="stylesheet">
     <style>        
-	    body {
+            body {
             font-family: 'Chelsea Market', cursive;
             margin: 0;
             padding: 0;
@@ -800,7 +799,7 @@
 <body>
    <div id="nft-modal" class="modal">
     <div class="modal-content">
-        <span class="close" onclick="document.getElementById('checkout-modal').classList.remove('active')">×</span>
+        <span class="close" onclick="document.getElementById('nft-modal').classList.remove('active')">×</span>
         <h2 id="nft-modal-title"></h2>
         <img id="nft-modal-image" src="" alt="NFT Image" style="max-width: 200px; border-radius: 10px;">
         <p><strong>Description:</strong> <span id="nft-modal-description"></span></p>
@@ -856,7 +855,7 @@
                     <option value="coinbase">Crypto (Coinbase)</option>
                     <option value="stripe">Credit Card (Stripe)</option>
                     <option value="paypal">PayPal</option>
-		    <option value="sol">Pay with SOL</option>
+                    <option value="sol">Pay with SOL</option>
                 </select>
             </label><br>
             <div id="payment-fields"></div>
@@ -865,6 +864,7 @@
         </form>
     </div>
 </div>
+
 
 <style>
     #checkout-modal.modal {
@@ -1622,6 +1622,7 @@
                     <input type="file" id="video-upload" accept="video/*">
                     <button onclick="uploadVideo()" data-tooltip="Upload Video">Upload Video</button>
                 </div>
+
 
 <style>
     #nft-modal.modal {
