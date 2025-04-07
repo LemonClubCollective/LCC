@@ -21,6 +21,7 @@ const paypalClient = new paypal.core.SandboxEnvironment(
 );
 const paypalClientInstance = new paypal.core.PayPalHttpClient(paypalClient);
 
+
 const multer = require('multer');
 const axios = require('axios');
 const { TOKEN_PROGRAM_ID: TokenProgramId, createInitializeMintInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createMintToInstruction, ASSOCIATED_TOKEN_PROGRAM_ID } = require('@solana/spl-token');
@@ -41,11 +42,15 @@ const s3Client = new S3Client({
 });
 
 
+
+
 // Constants
 const port = process.env.PORT || 8080;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
+
+
 
 
 // Define TOKEN_METADATA_PROGRAM_ID with fallback
@@ -56,6 +61,8 @@ if (!IMPORTED_TOKEN_METADATA_PROGRAM_ID) {
 }
 
 
+
+
 // Initialize Express app
 const app = express();
 app.use(express.json());
@@ -64,9 +71,14 @@ app.use(express.static('public'));
 app.use(cors());
 
 
+
+
 // Increase request size limit for JSON and form-data
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ limit: '500mb', extended: true }));
+
+
+
 
 
 
@@ -96,16 +108,14 @@ app.post('/claim-quest/:username/:type/:questId', async (req, res) => {
 });
 
 
+
+
 // Serve static files from folders
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/output', express.static(path.join(__dirname, 'output')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/videos', express.static(path.join(__dirname, 'videos')));
 app.use('/node_modules', express.static('node_modules'))
-
-
-
-
 
 
 // Ensure these directories exist
@@ -118,9 +128,7 @@ requiredDirs.forEach(dir => {
     }
 });
 
-
 const { Metaplex, keypairIdentity, TransactionBuilder } = require('@metaplex-foundation/js');
-
 
 // Global variables
 let users = {};
@@ -133,9 +141,6 @@ let connection;
 let metaplex;
 let transporter;
 let db;
-
-
-
 
 const nftLayers = {
     backgrounds: [
@@ -172,7 +177,7 @@ const nftLayers = {
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/seeds/rareredseed2.png'
     ],
     sprout: [
-        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/diamondsprout.png',
+'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/diamondsprout.png',
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/diamondsprout1.png',
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/diamondsprout3.png',
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/goldsprout.png',
@@ -185,7 +190,25 @@ const nftLayers = {
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/purplesprout1.png',
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/purplesprout2.png',
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/redrubysprout.png',
-        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/redrubysprout2.png'
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/redrubysprout2.png',
+     'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Blue_Sapphire_Sprout.png',
+'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Blue_Sapphire_Sprout_1.png',
+	'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Golden_Sprout.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Golden_Sprout_1.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Golden_Sprout_2.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Golden_Sprout_3.png',
+	'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/FireSprout.png',
+	'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Fire_Sprout_2.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Magic_Sprout.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Magic_Sprout_1.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Red_Ruby_Sprout.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Red_Ruby_Sprout_1.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Red_Ruby_Sprout_2.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Red_Ruby_Sprout_3.png',
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Red_Ruby_Sprout_4.png',
+
+        'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Royal_Lemon_Sprout_2.png',
+       'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/sprouts/Royal_Lemon_Sprout.png'  
     ],
     sapling: [
         'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/saplings/goldensapling.png',
@@ -217,6 +240,8 @@ const nftLayers = {
 };
 
 
+
+
 const profilePics = [
     'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png',
     'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP2.png',
@@ -239,6 +264,8 @@ const profilePics = [
     'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP9.png',
     'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP10.png'
 ];
+
+
 
 
 const saveData = async (data, collectionName) => {
@@ -296,6 +323,8 @@ const quests = {
 };
 
 
+
+
 async function retryRPC(operation, maxAttempts = 5, delay = 1000) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
@@ -316,6 +345,8 @@ async function retryRPC(operation, maxAttempts = 5, delay = 1000) {
 }
 
 
+
+
 async function loadWallet() {
   try {
     const walletData = await fsPromises.readFile(path.join(__dirname, 'data', 'dev-wallet.json'), 'utf8');
@@ -327,7 +358,11 @@ async function loadWallet() {
 }
 
 
+
+
 let isInitialized = false; // Guard to prevent multiple calls
+
+
 
 
 async function initialize() {
@@ -335,7 +370,11 @@ async function initialize() {
     isInitialized = true;
 
 
+
+
     console.log('[Initialize] Starting initialization');
+
+
 
 
     try {
@@ -348,8 +387,12 @@ async function initialize() {
     }
 
 
+
+
     const mongoUri = 'mongodb+srv://lemonclub:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
     console.log('[Initialize] MongoDB URI:', mongoUri);
+
+
 
 
     let client;
@@ -387,6 +430,8 @@ async function initialize() {
     }
 
 
+
+
     console.log('[Initialize] Attempting wallet load...');
     try {
         wallet = await loadWallet();
@@ -395,6 +440,8 @@ async function initialize() {
         console.error('[Initialize] Failed to load wallet:', error.message);
         wallet = null;
     }
+
+
 
 
         console.log('[Initialize] Attempting Solana/Metaplex init');
@@ -407,6 +454,8 @@ async function initialize() {
         connection = null;
         metaplex = null;
     }
+
+
 
 
  console.log('[Initialize] Attempting SES init');
@@ -427,6 +476,8 @@ async function initialize() {
     }
 
 
+
+
  console.log('[Initialize] Starting server');
     const startServer = async (portToTry = process.env.PORT || 8080) => {
         try {
@@ -439,12 +490,16 @@ async function initialize() {
             });
 
 
+
+
             const isPortFree = await checkPort(portToTry);
             console.log(`[PortCheck] Port ${portToTry} is ${isPortFree ? 'free' : 'in use'}`);
             let retryCount = 0;
             const maxRetries = 5;
             const retryDelay = 5000;
             const fallbackPort = 8080;
+
+
 
 
             
@@ -461,6 +516,8 @@ async function initialize() {
             }
 
 
+
+
             const server = app.listen(portToTry, () => {
                 console.log(`Server running on http://localhost:${portToTry}`);
                 if (blogs.length === 0) {
@@ -475,6 +532,8 @@ async function initialize() {
             });
 
 
+
+
             server.on('error', (err) => {
                 console.error('[ServerError] Server error:', err.message);
             });
@@ -484,16 +543,22 @@ async function initialize() {
     };
 
 
+
+
     console.log('[Initialize] Starting server');
     await startServer();
     console.log('[Initialize] Initialization complete');
 }
 
 
+
+
 // Helper to standardize timestamps
 function getCurrentTime() {
     return Date.now(); // Always milliseconds
 }
+
+
 
 
 app.post('/reset-levi-quests', async (req, res) => {
@@ -536,6 +601,8 @@ app.post('/reset-levi-quests', async (req, res) => {
 });
 
 
+
+
 function getRandomItem(array, rarityRules = null) {
     if (!array || array.length === 0) throw new Error('No items available in array for random selection');
     if (rarityRules) {
@@ -554,7 +621,11 @@ function getRandomItem(array, rarityRules = null) {
 }
 
 
+
+
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+
+
 
 
 const lambdaClient = new LambdaClient({
@@ -566,9 +637,13 @@ const lambdaClient = new LambdaClient({
 });
 
 
+
+
 async function generateNFT(tokenId, stageName = 'Lemon Seed') {
     console.log(`[GenerateNFT] Invoking Lambda for tokenId: ${tokenId}, stageName: ${stageName}`);
     const rarityRules = { 'diamond': 0.2, 'red': 0.4, 'purple': 0.5 };
+
+
 
 
     const payload = {
@@ -578,11 +653,15 @@ async function generateNFT(tokenId, stageName = 'Lemon Seed') {
     };
 
 
+
+
     const command = new InvokeCommand({
         FunctionName: 'GenerateNFT',
         Payload: JSON.stringify(payload),
         InvocationType: 'RequestResponse'
     });
+
+
 
 
     try {
@@ -594,6 +673,8 @@ async function generateNFT(tokenId, stageName = 'Lemon Seed') {
         }
 
 
+
+
         const body = JSON.parse(result.body);
         console.log(`[GenerateNFT] Lambda success: imageUrl: ${body.imageUrl}, metadataUrl: ${body.metadataUrl}`);
         return { imagePath: body.imageUrl, metadataPath: body.metadataUrl };
@@ -602,6 +683,8 @@ async function generateNFT(tokenId, stageName = 'Lemon Seed') {
         throw error;
     }
 }
+
+
 
 
 async function updateQuestProgress(username, type, questId, increment) {
@@ -619,10 +702,14 @@ async function updateQuestProgress(username, type, questId, increment) {
     }
 
 
+
+
     const now = Date.now();
     const todayMidnight = new Date().setUTCHours(0, 0, 0, 0);
     const weekInterval = 7 * 24 * 60 * 60 * 1000;
     const monthInterval = 30 * 24 * 60 * 60 * 1000;
+
+
 
 
     // Reset logic
@@ -644,12 +731,16 @@ async function updateQuestProgress(username, type, questId, increment) {
     }
 
 
+
+
     // Re-fetch quest after reset
     const updatedQuest = user.quests[type].find(q => q.id === questId);
     if (updatedQuest.completed && !updatedQuest.claimed) {
         console.log(`[Quest Update] ${questId} completed but not claimed—awaiting claim`);
         return;
     }
+
+
 
 
     const numericIncrement = Number(increment) || 1;
@@ -659,12 +750,16 @@ async function updateQuestProgress(username, type, questId, increment) {
     console.log(`[Quest Update] ${lowerUsername} - ${type} - ${questId}: Progress ${updatedQuest.progress}/${updatedQuest.goal}, Completed: ${updatedQuest.completed}`);
 
 
+
+
     try {
         await saveData(users, 'users');
     } catch (error) {
         console.error(`[Quest Update] Save failed for ${lowerUsername}: ${error.message}`);
     }
 }
+
+
 
 
 function awardPoints(username, category, points, activity) {
@@ -680,10 +775,16 @@ function awardPoints(username, category, points, activity) {
 }
 
 
+
+
 function getLemonadePoints(username) {
     const user = users[username];
     return Number((BigInt(user.stakingPoints || 0) + BigInt(user.arcadePoints || 0) + BigInt(user.questPoints || 0) + BigInt(user.mintingPoints || 0) + BigInt(user.bonusPoints || 0)));
 }
+
+
+
+
 
 
 
@@ -693,7 +794,11 @@ initialize().then(() => {
 });
 
 
+
+
 let loggedInUsername = null;
+
+
 
 
 async function requireAdmin(req, res, next) {
@@ -717,6 +822,8 @@ async function requireAdmin(req, res, next) {
 }
 
 
+
+
 function requirePermission(permission) {
     return (req, res, next) => {
         if (!loggedInUsername) {
@@ -729,6 +836,8 @@ function requirePermission(permission) {
         next();
     };
 }
+
+
 
 
 // Ensure session is initialized
@@ -745,11 +854,15 @@ app.use(session({
 }));
 
 
+
+
 // Debug logging middleware
 app.use((req, res, next) => {
     console.log('[Session] Session ID:', req.sessionID, 'Username:', req.session.username);
     next();
 });
+
+
 
 
 function trackLoginStreak(username) {
@@ -758,6 +871,8 @@ function trackLoginStreak(username) {
     const lastLogin = users[username].lastLogin ? new Date(users[username].lastLogin) : new Date(0);
     const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterdayMidnight = new Date(todayMidnight.getTime() - 24 * 60 * 60 * 1000);
+
+
 
 
     let pointsAwarded = 0;
@@ -777,6 +892,8 @@ function trackLoginStreak(username) {
 }
 
 
+
+
 app.post('/register', async (req, res) => {
     try {
         const { email, username, password, emailConsent } = req.body;
@@ -790,12 +907,14 @@ app.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'Invalid email format' });
         }
 
+
         const lowerUsername = username.toLowerCase();
         const userExists = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (userExists) {
             console.log('[Register] Username already taken:', username);
             return res.status(400).json({ error: 'Username already taken' });
         }
+
 
         const verificationToken = Math.random().toString(36).substring(2, 15);
         const newUser = { 
@@ -833,6 +952,7 @@ app.post('/register', async (req, res) => {
         await db.collection('users').insertOne(newUser);
         users[lowerUsername] = newUser;
         await saveData(users, 'users');
+
 
         const verificationLink = `https://www.lemonclubcollective.com/verify-email/${username}/${verificationToken}`;
         const sesParams = {
@@ -914,10 +1034,12 @@ app.post('/register', async (req, res) => {
             }
         };
 
+
         console.log('[Register] Sending verification email:', sesParams);
         const command = new SendEmailCommand(sesParams);
         await transporter.send(command);
         console.log('[Register] Verification email sent successfully to:', email);
+
 
         res.json({ success: true, message: 'Registered—check email to verify!' });
     } catch (error) {
@@ -925,6 +1047,7 @@ app.post('/register', async (req, res) => {
         res.status(500).json({ error: 'Failed to register', details: error.message });
     }
 });
+
 
 app.get('/verify-email/:username/:token', async (req, res) => {
     try {
@@ -937,6 +1060,7 @@ app.get('/verify-email/:username/:token', async (req, res) => {
             return res.status(400).send('Invalid verification token');
         }
 
+
         await db.collection('users').updateOne(
             { username: lowerUsername },
             { $set: { isVerified: true, verificationToken: null } }
@@ -944,6 +1068,7 @@ app.get('/verify-email/:username/:token', async (req, res) => {
         users[lowerUsername] = { ...user, isVerified: true, verificationToken: null };
         await saveData(users, 'users');
         console.log(`[VerifyEmail] Successfully verified ${lowerUsername}`);
+
 
         // Redirect to the homepage with a success message
         res.redirect('https://www.lemonclubcollective.com?verified=true');
@@ -1002,6 +1127,8 @@ app.post('/login', async (req, res) => {
 });
 
 
+
+
 app.get('/node_modules/big-integer/big-integer.js', (req, res) => {
     const filePath = path.join(__dirname, 'node_modules', 'big-integer', 'BigInteger.js');
     console.log('[Route Hit] Serving big-integer.js from:', filePath);
@@ -1013,6 +1140,8 @@ app.get('/node_modules/big-integer/big-integer.js', (req, res) => {
         }
     });
 });
+
+
 
 
 app.post('/fix-user-case', async (req, res) => {
@@ -1038,6 +1167,8 @@ app.post('/fix-user-case', async (req, res) => {
         res.status(500).json({ error: 'Failed to fix user case' });
     }
 });
+
+
 
 
 app.post('/reset-all-quests', async (req, res) => {
@@ -1091,6 +1222,8 @@ app.post('/reset-all-quests', async (req, res) => {
 });
 
 
+
+
 app.post('/fix-timestamps', async (req, res) => {
     try {
         const username = 'levi';
@@ -1109,6 +1242,8 @@ app.post('/fix-timestamps', async (req, res) => {
 });
 
 
+
+
 app.post('/api/mint-nft', async (req, res) => {
     try {
         const { walletAddress, username } = req.body;
@@ -1120,11 +1255,15 @@ app.post('/api/mint-nft', async (req, res) => {
         console.log('[Mint] Starting mint for:', username, walletAddress);
 
 
+
+
         // Ensure wallet is initialized
         if (!wallet) {
             console.error('[Mint] Server wallet not initialized');
             throw new Error('Server wallet not initialized');
         }
+
+
 
 
         // Initialize Solana connection and constants
@@ -1136,9 +1275,13 @@ app.post('/api/mint-nft', async (req, res) => {
         const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
 
+
+
         const mintKeypair = Keypair.generate();
         const mintPublicKey = mintKeypair.publicKey.toBase58();
         console.log('[Mint] Mint Pubkey:', mintPublicKey);
+
+
 
 
         // Transaction 1: Create Mint, ATA, and Mint To
@@ -1160,6 +1303,8 @@ app.post('/api/mint-nft', async (req, res) => {
                 TOKEN_PROGRAM_ID
             )
         );
+
+
 
 
         const tokenAccount = await getAssociatedTokenAddress(
@@ -1190,11 +1335,15 @@ app.post('/api/mint-nft', async (req, res) => {
         );
 
 
+
+
         // Generate NFT Assets via Lambda
         const tokenId = Date.now();
         console.log('[Mint] Generating NFT for tokenId:', tokenId);
         const { imagePath, metadataPath } = await generateNFT(tokenId, 'Lemon Seed');
         console.log('[Mint] Generated - Image:', imagePath, 'Metadata:', metadataPath);
+
+
 
 
         // Verify Metadata Accessibility in S3 and CloudFront
@@ -1228,6 +1377,8 @@ app.post('/api/mint-nft', async (req, res) => {
         }
 
 
+
+
         // Transaction 2: Set Metadata
         const tx2 = new Transaction();
         const [metadataPDA] = PublicKey.findProgramAddressSync(
@@ -1237,9 +1388,13 @@ app.post('/api/mint-nft', async (req, res) => {
         console.log('[Mint] Metadata PDA:', metadataPDA.toBase58());
 
 
+
+
         const name = `Lemon Seed #${tokenId}`;
         const symbol = 'LSEED';
         const metadataUri = metadataPath; // Use generated metadata path
+
+
 
 
         // Corrected Data Buffer for createMetadataAccountV3
@@ -1260,6 +1415,8 @@ app.post('/api/mint-nft', async (req, res) => {
         ]);
 
 
+
+
         tx2.add(
             new TransactionInstruction({
                 keys: [
@@ -1277,6 +1434,8 @@ app.post('/api/mint-nft', async (req, res) => {
         );
 
 
+
+
         // Set Blockhash and Sign Transactions
         const { blockhash } = await connection.getLatestBlockhash();
         console.log('[Mint] Blockhash:', blockhash);
@@ -1287,6 +1446,8 @@ app.post('/api/mint-nft', async (req, res) => {
         tx1.partialSign(mintKeypair, wallet); // Mint keypair and server wallet sign tx1
         tx2.partialSign(wallet); // Server wallet signs tx2
         console.log('[Mint] Transactions signed');
+
+
 
 
         // Update Database
@@ -1314,6 +1475,8 @@ app.post('/api/mint-nft', async (req, res) => {
         updateQuestProgress(lowerUsername, 'limited', 'launch-party', 1);
 
 
+
+
         // Send Response
         res.json({
             transaction1: Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex'),
@@ -1326,6 +1489,8 @@ app.post('/api/mint-nft', async (req, res) => {
         res.status(500).json({ error: 'Failed to prepare mint transaction', details: error.message });
     }
 });
+
+
 
 
 app.get('/check-nft/:mintAddress', async (req, res) => {
@@ -1343,6 +1508,8 @@ app.get('/check-nft/:mintAddress', async (req, res) => {
 });
 
 
+
+
 app.get('/node_modules/big-integer/big-integer.js', (req, res) => {
     const filePath = path.join(__dirname, 'node_modules', 'big-integer', 'BigInteger.js');
     console.log('[Route Hit] Serving big-integer.js from:', filePath);
@@ -1355,17 +1522,21 @@ app.get('/node_modules/big-integer/big-integer.js', (req, res) => {
     });
 });
 
+
 app.post('/printify-webhook', express.json(), async (req, res) => {
     console.log('[Webhook] Received:', JSON.stringify(req.body, null, 2));
     const event = req.body;
 
+
     // Respond immediately to Printify
     res.sendStatus(200);
+
 
     if (event.type === 'product:publish:started') {
         const shopId = event.resource.data.shop_id;
         const productId = event.resource.id;
         console.log(`[Webhook] Publishing started for product ${productId} in shop ${shopId}`);
+
 
         const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'; // Your token
         const maxRetries = 3;
@@ -1406,6 +1577,7 @@ app.post('/printify-webhook', express.json(), async (req, res) => {
     }
 });
 
+
 app.get('/printify-products', async (req, res) => {
     console.log('[Printify] Starting product fetch...');
     try {
@@ -1439,6 +1611,7 @@ app.get('/printify-products', async (req, res) => {
     }
 });
 
+
 // server.js, replace /delete-video (around line 2678+)
 app.post('/delete-video', async (req, res) => {
     try {
@@ -1454,11 +1627,15 @@ app.post('/delete-video', async (req, res) => {
         }
 
 
+
+
         const video = await db.collection('videos').findOne({ _id: new ObjectId(id) });
         if (!video) {
             console.log(`[DeleteVideo] Video not found: ${id}`);
             return res.status(404).json({ error: 'Video not found' });
         }
+
+
 
 
         const videoPath = path.join(__dirname, 'videos', path.basename(video.url));
@@ -1468,6 +1645,8 @@ app.post('/delete-video', async (req, res) => {
         } else {
             console.log(`[DeleteVideo] Video file not found: ${videoPath}`);
         }
+
+
 
 
         await db.collection('videos').deleteOne({ _id: new ObjectId(id) });
@@ -1480,6 +1659,7 @@ app.post('/delete-video', async (req, res) => {
     }
 });
 
+
 app.post('/printify-order', async (req, res) => {
     try {
         const { username, productId, variantId, address } = req.body;
@@ -1487,15 +1667,19 @@ app.post('/printify-order', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
 
         const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
         const [firstName, ...lastNameParts] = fullName.split(' ');
         const lastName = lastNameParts.join(' ');
 
+
         const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...';
         const shopId = '21660074';
+
 
         const orderData = {
             line_items: [{
@@ -1519,6 +1703,7 @@ app.post('/printify-order', async (req, res) => {
             }
         };
 
+
         const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
             method: 'POST',
             headers: {
@@ -1530,9 +1715,11 @@ app.post('/printify-order', async (req, res) => {
         const orderResult = await orderResponse.json();
         console.log('[PrintifyOrder] Response:', orderResult);
 
+
         if (!orderResponse.ok) {
             throw new Error(orderResult.errors?.reason || 'Failed to create order');
         }
+
 
         res.json({ success: true, orderId: orderResult.id });
     } catch (error) {
@@ -1540,6 +1727,7 @@ app.post('/printify-order', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 // Existing /create-charge endpoint (added previously)
 app.post('/create-charge', async (req, res) => {
@@ -1549,8 +1737,10 @@ app.post('/create-charge', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
 
         const chargeData = {
             name: 'Lemon Club Merch Purchase',
@@ -1567,6 +1757,7 @@ app.post('/create-charge', async (req, res) => {
     }
 });
 
+
 // Add Stripe endpoint
 app.post('/create-stripe-checkout', async (req, res) => {
     try {
@@ -1575,8 +1766,10 @@ app.post('/create-stripe-checkout', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -1594,12 +1787,14 @@ app.post('/create-stripe-checkout', async (req, res) => {
             metadata: { username }
         });
 
+
         res.json({ success: true, url: session.url });
     } catch (error) {
         console.error('[CreateStripeCheckout] Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 // Add PayPal endpoint
 app.post('/create-paypal-order', async (req, res) => {
@@ -1609,8 +1804,10 @@ app.post('/create-paypal-order', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
 
         const request = new paypal.orders.OrdersCreateRequest();
         request.prefer("return=representation");
@@ -1629,8 +1826,10 @@ app.post('/create-paypal-order', async (req, res) => {
             }
         });
 
+
         const order = await paypalClientInstance.execute(request);
         const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
+
 
         res.json({ success: true, url: approvalUrl });
     } catch (error) {
@@ -1638,6 +1837,7 @@ app.post('/create-paypal-order', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 /// server.js, replace /delete-blog (around your line 2678+)
 app.post('/delete-blog', async (req, res) => {
@@ -1654,11 +1854,15 @@ app.post('/delete-blog', async (req, res) => {
         }
 
 
+
+
         const result = await db.collection('blogs').deleteOne({ _id: new ObjectId(id) });
         if (result.deletedCount === 0) {
             console.log(`[DeleteBlog] Blog not found: ${id}`);
             return res.status(404).json({ error: 'Blog not found' });
         }
+
+
 
 
         blogs = await db.collection('blogs').find().toArray();
@@ -1671,10 +1875,14 @@ app.post('/delete-blog', async (req, res) => {
 });
 
 
+
+
 app.post('/delete-post', async (req, res) => {
     try {
         const { postId } = req.body;
         console.log('[DeletePost] Attempting to delete post:', postId);
+
+
 
 
         // Check if user is logged in via session
@@ -1682,6 +1890,8 @@ app.post('/delete-post', async (req, res) => {
             console.log('[DeletePost] No session or username');
             return res.status(401).json({ error: 'Please log in' });
         }
+
+
 
 
         // Verify admin status
@@ -1692,11 +1902,15 @@ app.post('/delete-post', async (req, res) => {
         }
 
 
+
+
         const result = await db.collection('posts').deleteOne({ _id: new ObjectId(postId) });
         if (result.deletedCount === 0) {
             console.log('[DeletePost] Post not found:', postId);
             return res.status(404).json({ error: 'Post not found' });
         }
+
+
 
 
         posts = await db.collection('posts').find().toArray();
@@ -1709,6 +1923,8 @@ app.post('/delete-post', async (req, res) => {
 });
 
 
+
+
 app.post('/upload-profile-pic/:username', async (req, res) => {
     try {
         const username = req.params.username;
@@ -1718,7 +1934,9 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
+
         const upload = multer({ storage: multer.memoryStorage() }).single('profilePic');
+
 
         upload(req, res, async (err) => {
             if (err) {
@@ -1730,6 +1948,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
                 return res.status(400).json({ error: 'No file uploaded' });
             }
 
+
             const filename = `${Date.now()}.jpg`;
             console.log('[UploadProfilePic] Uploading to S3:', filename);
             const uploadParams = {
@@ -1738,6 +1957,7 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
                 Body: req.file.buffer,
                 ContentType: 'image/jpeg',
             };
+
 
             try {
                 const uploadPromise = s3Client.send(new PutObjectCommand(uploadParams));
@@ -1764,6 +1984,9 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 
 
 
+
+
+
 app.post('/upload-video', async (req, res) => {
     try {
         const videoDir = path.join(__dirname, 'videos');
@@ -1773,6 +1996,8 @@ app.post('/upload-video', async (req, res) => {
         } else {
             console.log(`[VideoUpload] Using existing videos directory: ${videoDir}`);
         }
+
+
 
 
         if (!req.session || !req.session.username) {
@@ -1787,6 +2012,8 @@ app.post('/upload-video', async (req, res) => {
         }
 
 
+
+
         const storage = multer.diskStorage({
             destination: (req, file, cb) => cb(null, videoDir),
             filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
@@ -1795,6 +2022,8 @@ app.post('/upload-video', async (req, res) => {
             storage: storage,
             limits: { fileSize: 1024 * 1024 * 1024 } // 1GB limit
         }).single('video');
+
+
 
 
         upload(req, res, async (err) => {
@@ -1817,8 +2046,12 @@ app.post('/upload-video', async (req, res) => {
             await s3Client.send(new PutObjectCommand(uploadParams));
 
 
+
+
             // Delete the local file after uploading to S3
             fs.unlinkSync(req.file.path);
+
+
 
 
             // Use CloudFront URL
@@ -1837,12 +2070,16 @@ app.post('/upload-video', async (req, res) => {
 });
 
 
+
+
 app.post('/playtime/:username', async (req, res) => {
     try {
         const { username } = req.params;
         const { minutes } = req.body;
         if (!users[username.toLowerCase()]) return res.status(404).json({ success: false, error: 'User not found' });
         if (!minutes || minutes < 0) return res.status(400).json({ success: false, error: 'Invalid playtime' });
+
+
 
 
         const wholeMinutes = Math.floor(minutes);
@@ -1859,6 +2096,8 @@ app.post('/playtime/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to update playtime' });
     }
 });
+
+
 
 
 app.post('/claim-victory/:username/:gameId', async (req, res) => {
@@ -1879,6 +2118,8 @@ app.post('/claim-victory/:username/:gameId', async (req, res) => {
 });
 
 
+
+
 app.post('/profile/:username', async (req, res) => {
     try {
         const { username } = req.params;
@@ -1890,6 +2131,8 @@ app.post('/profile/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch profile' });
     }
 });
+
+
 
 
 app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
@@ -1910,6 +2153,8 @@ app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to update profile pic' });
     }
 });
+
+
 
 
 app.post('/quests/:username/update', async (req, res) => {
@@ -1941,6 +2186,8 @@ app.post('/quests/:username/update', async (req, res) => {
 });
 
 
+
+
 app.post('/nft/:username', async (req, res) => {
     try {
         const { username } = req.params;
@@ -1952,6 +2199,8 @@ app.post('/nft/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch NFTs' });
     }
 });
+
+
 
 
 app.get('/profile/:username', async (req, res) => {
@@ -1980,6 +2229,8 @@ app.get('/profile/:username', async (req, res) => {
 });
 
 
+
+
 app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -2002,6 +2253,8 @@ app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
 });
 
 
+
+
 app.get('/api/quests/:username', async (req, res) => {
     console.log(`[Quest Fetch] Fetching quests for ${req.params.username}`);
     try {
@@ -2021,11 +2274,14 @@ app.get('/api/quests/:username', async (req, res) => {
 });
 
 
+
+
 app.get('/nft/:username', async (req, res) => {
     try {
         const { username } = req.params;
         const lowerUsername = username.toLowerCase();
         console.log(`[NFT] Fetching NFTs for user: ${lowerUsername}`);
+
 
         // Fetch user from the database
         const user = await db.collection('users').findOne({ username: { $regex: `^${lowerUsername}$`, $options: 'i' } });
@@ -2034,14 +2290,17 @@ app.get('/nft/:username', async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
+
         const nfts = user.nfts || [];
         console.log(`[NFT] Fetched ${nfts.length} NFTs for ${lowerUsername}`);
+
 
         // If Metaplex or connection isn't available, return basic NFT data
         if (!metaplex || !connection) {
             console.warn('[NFT] Metaplex or connection not available, returning basic NFT data');
             return res.json({ success: true, nfts });
         }
+
 
         // Fetch on-chain metadata for each NFT
         const enrichedNfts = await Promise.all(nfts.map(async (nft) => {
@@ -2051,12 +2310,14 @@ app.get('/nft/:username', async (req, res) => {
                 const metadataAccount = await metaplex.nfts().findByMint({ mintAddress });
                 const metadata = metadataAccount.json || {};
 
+
                 // Extract attributes (Stage, Rarity, Background, Base)
                 const attributes = metadata.attributes || [];
                 const stage = attributes.find(attr => attr.trait_type === 'Stage')?.value || 'Sapling';
                 const rarity = attributes.find(attr => attr.trait_type === 'Rarity')?.value || 'Ruby';
                 const background = attributes.find(attr => attr.trait_type === 'Background')?.value || 'BGForestSunset';
                 const base = attributes.find(attr => attr.trait_type === 'Base')?.value || 'redrubysapling3';
+
 
                 // Enrich NFT with metadata
                 const enrichedNft = {
@@ -2078,6 +2339,7 @@ app.get('/nft/:username', async (req, res) => {
             }
         }));
 
+
         console.log(`[NFT] Returning ${enrichedNfts.length} enriched NFTs for ${lowerUsername}`);
         res.json({ success: true, nfts: enrichedNfts });
     } catch (error) {
@@ -2085,6 +2347,9 @@ app.get('/nft/:username', async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to fetch NFTs' });
     }
 });
+
+
+
 
 
 
@@ -2097,8 +2362,12 @@ app.post('/stake/:username/:mintAddress', async (req, res) => {
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
 
+
+
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft || nft.staked) return res.status(400).json({ success: false, error: 'NFT not found or already staked' });
+
+
 
 
         nft.staked = true;
@@ -2120,6 +2389,8 @@ app.post('/stake/:username/:mintAddress', async (req, res) => {
 });
 
 
+
+
 // server.js, replace entire function at line 2500
 app.post('/unstake/:username/:mintAddress', async (req, res) => {
     try {
@@ -2130,8 +2401,12 @@ app.post('/unstake/:username/:mintAddress', async (req, res) => {
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
 
+
+
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft || !nft.staked) return res.status(400).json({ success: false, error: 'NFT not found or not staked' });
+
+
 
 
         nft.staked = false;
@@ -2153,6 +2428,10 @@ app.post('/unstake/:username/:mintAddress', async (req, res) => {
 
 
 
+
+
+
+
 app.get('/evolve/:username/:mintAddress', async (req, res) => {
     try {
         const { username, mintAddress } = req.params;
@@ -2165,12 +2444,18 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
         }
 
 
+
+
         const lemonadePoints = getLemonadePoints(lowerUsername);
         if (lemonadePoints < 10) return res.status(400).json({ success: false, error: 'Not enough Lemonade Points' });
 
 
+
+
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft) return res.status(404).json({ success: false, error: 'NFT not found' });
+
+
 
 
         const baseStageName = nft.name.split('#')[0].trim();
@@ -2182,15 +2467,21 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
         }
 
 
+
+
         const oldStage = nft.name;
         const newStageBase = stageMap[baseStageName];
         nft.name = `${newStageBase} #${oldStage.split('#')[1]}`;
         console.log(`[Evolve] NFT ${mintAddress} evolved from ${oldStage} to ${nft.name}`);
 
 
+
+
         const tokenId = Date.now();
         const { imagePath, metadataPath } = await generateNFT(tokenId, newStageBase);
         nft.imageUri = imagePath; // Use the CloudFront URL
+
+
 
 
         const mintPublicKey = new PublicKey(mintAddress);
@@ -2208,6 +2499,8 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
         }
 
 
+
+
         const categories = [
             { name: 'stakingPoints', value: BigInt(user.stakingPoints || 0) },
             { name: 'arcadePoints', value: BigInt(user.arcadePoints || 0) },
@@ -2215,6 +2508,8 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
             { name: 'mintingPoints', value: BigInt(user.mintingPoints || 0) },
             { name: 'bonusPoints', value: BigInt(user.bonusPoints || 0) }
         ];
+
+
 
 
         const totalPoints = categories.reduce((sum, cat) => sum + cat.value, BigInt(0));
@@ -2232,6 +2527,8 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
                 user[largestCategory.name] = Number(BigInt(Math.max(0, Number(BigInt(user[largestCategory.name]) - pointsToDeduct))));
             }
         }
+
+
 
 
         await db.collection('users').updateOne(
@@ -2257,9 +2554,13 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
 });
 
 
+
+
 app.get('/solana-web3.js', (req, res) => {
     res.sendFile(path.join(__dirname, 'node_modules', '@solana', 'web3.js', 'dist', 'index.js'));
 });
+
+
 
 
 app.post('/posts', async (req, res) => {
@@ -2290,6 +2591,8 @@ app.post('/posts', async (req, res) => {
         res.status(500).json({ error: 'Failed to submit post', details: error.message });
     }
 });
+
+
 
 
 app.post('/posts/comment', async (req, res) => {
@@ -2330,6 +2633,8 @@ app.post('/posts/comment', async (req, res) => {
 });
 
 
+
+
 app.post('/posts/comment/reply', async (req, res) => {
     try {
         if (!loggedInUsername) return res.status(401).json({ error: 'Please log in to reply' });
@@ -2353,7 +2658,11 @@ app.post('/posts/comment/reply', async (req, res) => {
 });
 
 
+
+
 // [Unchanged imports and setup]
+
+
 
 
 // Update /posts/like to return a better message
@@ -2386,6 +2695,8 @@ app.post('/posts/like', async (req, res) => {
 });
 
 
+
+
 // Update /posts/like-comment to handle missing _id gracefully
 app.post('/posts/like-comment', async (req, res) => {
     try {
@@ -2399,10 +2710,14 @@ app.post('/posts/like-comment', async (req, res) => {
         }
 
 
+
+
         const comment = post.comments.find(c => c._id && c._id.toString() === commentId);
         if (!comment) {
             return res.status(404).json({ error: 'Comment not found' });
         }
+
+
 
 
         comment.likedBy = comment.likedBy || [];
@@ -2413,10 +2728,14 @@ app.post('/posts/like-comment', async (req, res) => {
         comment.likes = (comment.likes || 0) + 1;
 
 
+
+
         await db.collection('posts').updateOne(
             { _id: new ObjectId(postId), 'comments._id': new ObjectId(commentId) },
             { $set: { 'comments.$': comment } }
         );
+
+
 
 
         posts = await db.collection('posts').find().toArray();
@@ -2428,6 +2747,8 @@ app.post('/posts/like-comment', async (req, res) => {
 });
 
 
+
+
 // [Unchanged remaining endpoints]
 app.post('/posts/delete-comment', async (req, res) => {
     try {
@@ -2435,10 +2756,14 @@ app.post('/posts/delete-comment', async (req, res) => {
         console.log('[DeleteComment] Attempting to delete comment:', commentId, 'from post:', postId);
 
 
+
+
         if (!req.session || !req.session.username) {
             console.log('[DeleteComment] No session or username');
             return res.status(401).json({ error: 'Please log in' });
         }
+
+
 
 
         const user = await db.collection('users').findOne({ username: req.session.username });
@@ -2448,10 +2773,14 @@ app.post('/posts/delete-comment', async (req, res) => {
         }
 
 
+
+
         const post = await db.collection('posts').findOne({ _id: new ObjectId(postId) });
         if (!post) {
             return res.status(404).json({ error: 'Post not found' });
         }
+
+
 
 
         const result = await db.collection('posts').updateOne(
@@ -2460,10 +2789,14 @@ app.post('/posts/delete-comment', async (req, res) => {
         );
 
 
+
+
         if (result.modifiedCount === 0) {
             console.log('[DeleteComment] Comment not found:', commentId);
             return res.status(404).json({ error: 'Comment not found' });
         }
+
+
 
 
         // Also remove any replies to this comment
@@ -2471,6 +2804,8 @@ app.post('/posts/delete-comment', async (req, res) => {
             { _id: new ObjectId(postId) },
             { $pull: { comments: { parentId: new ObjectId(commentId) } } }
         );
+
+
 
 
         posts = await db.collection('posts').find().toArray();
@@ -2483,6 +2818,8 @@ app.post('/posts/delete-comment', async (req, res) => {
 });
 
 
+
+
 app.post('/submit-ticket', async (req, res) => {
     try {
         const { name, email, message } = req.body;
@@ -2491,6 +2828,7 @@ app.post('/submit-ticket', async (req, res) => {
             console.log('[SubmitTicket] Missing required fields:', { name, email, message });
             return res.status(400).json({ error: 'All fields required' });
         }
+
 
         const sesParams = {
             Source: 'matthew.kobilan@gmail.com', // Use verified email for testing
@@ -2509,6 +2847,7 @@ app.post('/submit-ticket', async (req, res) => {
             }
         };
 
+
         console.log('[SubmitTicket] Sending email with SES params:', sesParams);
         const command = new SendEmailCommand(sesParams);
         await transporter.send(command); // transporter is your SESClient instance
@@ -2522,10 +2861,15 @@ app.post('/submit-ticket', async (req, res) => {
 
 
 
+
+
+
 app.get('/videos', (req, res) => {
     console.log('[Videos] Returning:', videos);
     res.json({ success: true, videos });
 });
+
+
 
 
 app.post('/blog-posts', async (req, res) => {
@@ -2539,10 +2883,14 @@ app.post('/blog-posts', async (req, res) => {
         }
 
 
+
+
         const { title, content } = req.body;
         if (!title || !content) {
             return res.status(400).json({ error: 'Title and content are required' });
         }
+
+
 
 
         const newBlog = {
@@ -2551,6 +2899,8 @@ app.post('/blog-posts', async (req, res) => {
             timestamp: Date.now(),
             uploadedBy: req.session.username
         };
+
+
 
 
         await db.collection('blogs').insertOne(newBlog);
@@ -2563,6 +2913,8 @@ app.post('/blog-posts', async (req, res) => {
 });
 
 
+
+
 app.get('/blog-posts', async (req, res) => {
     try {
         const blogPosts = await db.collection('blogs').find().toArray();
@@ -2572,6 +2924,8 @@ app.get('/blog-posts', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch blog posts' });
     }
 });
+
+
 
 
 app.get('/posts', async (req, res) => {
@@ -2586,15 +2940,21 @@ app.get('/posts', async (req, res) => {
 });
 
 
+
+
 app.get('/tickets', requireAdmin, (req, res) => {
     res.json({ success: true, tickets });
 });
+
+
 
 
 app.post('/logout', (req, res) => {
     loggedInUsername = null;
     res.json({ success: true });
 });
+
+
 
 
 app.post('/section-visit/:username', async (req, res) => {
@@ -2609,6 +2969,8 @@ app.post('/section-visit/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to track section visit' });
     }
 });
+
+
 
 
 app.post('/social-visit/:username', async (req, res) => {
@@ -2641,11 +3003,15 @@ app.post('/social-visit/:username', async (req, res) => {
 });
 
 
+
+
 app.post('/checkout', async (req, res) => {
     try {
         const { username } = req.body;
         if (!username) return res.status(400).json({ error: 'Username required' });
         if (!users[username]) return res.status(404).json({ error: 'User not found' });
+
+
 
 
         const session = await stripe.checkout.sessions.create({
@@ -2671,6 +3037,8 @@ app.post('/checkout', async (req, res) => {
 });
 
 
+
+
 app.get('/success', async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
@@ -2690,9 +3058,13 @@ app.get('/success', async (req, res) => {
 });
 
 
+
+
 app.get('/cancel', (req, res) => {
     res.send('Payment canceled. <a href="/">Return to site</a>');
 });
+
+
 
 
 app.post('/coinbase-checkout', async (req, res) => {
@@ -2700,6 +3072,8 @@ app.post('/coinbase-checkout', async (req, res) => {
         const { username } = req.body;
         if (!username) return res.status(400).json({ error: 'Username required' });
         if (!users[username]) return res.status(404).json({ error: 'User not found' });
+
+
 
 
         const chargeData = {
@@ -2718,6 +3092,8 @@ app.post('/coinbase-checkout', async (req, res) => {
 });
 
 
+
+
 app.post('/coinbase-webhook', express.json(), async (req, res) => {
     try {
         const event = req.body.event;
@@ -2734,6 +3110,8 @@ app.post('/coinbase-webhook', express.json(), async (req, res) => {
 });
 
 
+
+
 app.get('/store-items', (req, res) => {
     res.json([
         { id: 1, name: 'Water Droplets', price: 100, description: 'Boost your NFT growth with water droplets!' },
@@ -2742,10 +3120,14 @@ app.get('/store-items', (req, res) => {
 });
 
 
+
+
 app.post('/store/purchase/:username/:itemId', async (req, res) => {
     try {
         const { username, itemId } = req.params;
         if (!users[username]) return res.status(404).json({ success: false, error: 'User not found' });
+
+
 
 
         const items = [
@@ -2756,10 +3138,14 @@ app.post('/store/purchase/:username/:itemId', async (req, res) => {
         if (!item) return res.status(400).json({ success: false, error: 'Item not found' });
 
 
+
+
         const lemonadePoints = getLemonadePoints(username);
         if (BigInt(lemonadePoints) < BigInt(item.price)) {
             return res.status(400).json({ success: false, error: 'Not enough points' });
         }
+
+
 
 
         if (item.id === 1) {
@@ -2776,6 +3162,7 @@ app.post('/store/purchase/:username/:itemId', async (req, res) => {
     }
 });
 
+
 app.post('/create-stripe-checkout', async (req, res) => {
     try {
         const { username, amount } = req.body;
@@ -2783,8 +3170,10 @@ app.post('/create-stripe-checkout', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
@@ -2802,12 +3191,14 @@ app.post('/create-stripe-checkout', async (req, res) => {
             metadata: { username }
         });
 
+
         res.json({ success: true, url: session.url });
     } catch (error) {
         console.error('[CreateStripeCheckout] Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 app.post('/create-paypal-order', async (req, res) => {
     try {
@@ -2816,8 +3207,10 @@ app.post('/create-paypal-order', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
 
         const request = new paypal.orders.OrdersCreateRequest();
         request.prefer("return=representation");
@@ -2836,8 +3229,10 @@ app.post('/create-paypal-order', async (req, res) => {
             }
         });
 
+
         const order = await paypalClient.execute(request);
         const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
+
 
         res.json({ success: true, url: approvalUrl });
     } catch (error) {
@@ -2846,6 +3241,7 @@ app.post('/create-paypal-order', async (req, res) => {
     }
 });
 
+
 app.post('/create-sol-transaction', async (req, res) => {
     try {
         const { userWallet, amount } = req.body;
@@ -2853,8 +3249,10 @@ app.post('/create-sol-transaction', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+
         const userPubkey = new PublicKey(userWallet);
         const lamports = Math.round(amount * solanaWeb3.LAMPORTS_PER_SOL); // Convert USD to SOL (approx)
+
 
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
@@ -2864,9 +3262,11 @@ app.post('/create-sol-transaction', async (req, res) => {
             })
         );
 
+
         const { blockhash } = await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = userPubkey;
+
 
         const serializedTx = transaction.serialize({ requireAllSignatures: false });
         res.json({ success: true, transaction: Buffer.from(serializedTx).toString('base64') });
@@ -2876,6 +3276,7 @@ app.post('/create-sol-transaction', async (req, res) => {
     }
 });
 
+
 app.post('/apply-water/:username/:mintAddress', async (req, res) => {
     try {
         const { username, mintAddress } = req.params;
@@ -2883,9 +3284,13 @@ app.post('/apply-water/:username/:mintAddress', async (req, res) => {
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
 
+
+
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft || !nft.staked) return res.status(400).json({ success: false, error: 'NFT not found or not staked' });
         if (!user.waterDroplets || user.waterDroplets < 10) return res.status(400).json({ success: false, error: 'Not enough water droplets' });
+
+
 
 
         user.waterDroplets -= 10;
@@ -2898,6 +3303,8 @@ app.post('/apply-water/:username/:mintAddress', async (req, res) => {
         res.status(500).json({ error: 'Failed to apply water droplets' });
     }
 });
+
+
 
 
 app.post('/admin/update-ticket/:ticketId', requireAdmin, async (req, res) => {
@@ -2916,6 +3323,8 @@ app.post('/admin/update-ticket/:ticketId', requireAdmin, async (req, res) => {
 });
 
 
+
+
 app.post('/admin/update-user/:username', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -2930,6 +3339,8 @@ app.post('/admin/update-user/:username', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to update user' });
     }
 });
+
+
 
 
 app.post('/admin/update-quests', requireAdmin, async (req, res) => {
@@ -2964,6 +3375,8 @@ app.post('/admin/update-quests', requireAdmin, async (req, res) => {
 });
 
 
+
+
 app.post('/admin/reset-user/:username', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -2994,7 +3407,11 @@ app.post('/admin/reset-user/:username', requireAdmin, async (req, res) => {
 }
 
 
+
+
 });
+
+
 
 
 app.post('/admin/ban-user/:username', requireAdmin, async (req, res) => {
@@ -3012,6 +3429,8 @@ app.post('/admin/ban-user/:username', requireAdmin, async (req, res) => {
 });
 
 
+
+
 app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -3021,6 +3440,8 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
             console.log(`[AdminUpdatePermissions] User not found: ${username}`);
             return res.status(404).json({ error: 'User not found' });
         }
+
+
 
 
         const updates = {};
@@ -3038,6 +3459,8 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
         }
 
 
+
+
         await db.collection('users').updateOne(
             { username: { $regex: `^${username}$`, $options: 'i' } },
             { $set: updates }
@@ -3050,6 +3473,8 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
         res.status(500).json({ error: 'Failed to update user permissions: ' + error.message });
     }
 });
+
+
 
 
 async function setLeviAsAdmin() {
@@ -3076,14 +3501,20 @@ async function setLeviAsAdmin() {
 }
 
 
+
+
 console.log('[Route Check] Registered GET routes:', app._router.stack
     .filter(r => r.route && r.route.methods.get)
     .map(r => r.route.path));
 
 
+
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+
 
 
 // Ensure initialize runs only once
