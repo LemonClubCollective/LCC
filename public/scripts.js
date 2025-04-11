@@ -424,7 +424,12 @@ function showProductModal(productId) {
 
 
     document.getElementById('product-modal-title').textContent = product.title;
-    document.getElementById('product-modal-image').src = product.images[0]?.src || 'https://via.placeholder.com/300';
+    const gallery = document.getElementById('product-gallery-images');
+    let galleryHtml = '';
+    product.images.forEach((img, index) => {
+        galleryHtml += `<img src="${img.src || 'https://via.placeholder.com/300'}" alt="${product.title} - Image ${index + 1}">`;
+    });
+    gallery.innerHTML = galleryHtml;
     document.getElementById('product-modal-description').innerHTML = product.description;
     document.getElementById('product-modal-price').textContent = `$${product.variants[0].price / 100}`;
 
@@ -455,6 +460,17 @@ function closeProductModal() {
     if (modal) modal.classList.remove('active');
 }
 
+function scrollGallery(direction) {
+    const gallery = document.getElementById('product-gallery-images');
+    const scrollAmount = 310; // Width of one image (300px) + gap (10px)
+    const currentScroll = gallery.scrollLeft;
+
+    if (direction === 'prev') {
+        gallery.scrollLeft = Math.max(0, currentScroll - scrollAmount);
+    } else if (direction === 'next') {
+        gallery.scrollLeft = currentScroll + scrollAmount;
+    }
+}
 
 function closeCheckoutModal() {
     const modal = document.getElementById('checkout-modal');
@@ -682,19 +698,20 @@ async function completePurchase() {
     }
 }
 
-
 async function updateNFTDisplay(containerId, showButtons = true) {
     console.log('[NFTDisplay] Starting update for container:', containerId);
     const container = document.getElementById(containerId);
-    if (!container) {
-        console.error(`[NFTDisplay] Container ${containerId} not found`);
-        return;
-    }
-    if (!loggedInUsername) {
-        container.innerHTML = '<p>Please login to manage your Lemon NFTs!</p>';
+    const guestPitch = document.getElementById('nft-guest-pitch');
+    if (!container || !guestPitch) {
+        console.error(`[NFTDisplay] Container ${containerId} or guest pitch not found`);
         return;
     }
 
+    if (!loggedInUsername) {
+        container.style.display = 'none';
+        guestPitch.style.display = 'block';
+        return;
+    }
 
     const response = await fetch(`/nft/${loggedInUsername.toLowerCase()}`, { 
         method: 'GET',
@@ -705,9 +722,14 @@ async function updateNFTDisplay(containerId, showButtons = true) {
     if (response.ok && data.success) {
         const nfts = data.nfts || [];
         if (nfts.length === 0) {
-            container.innerHTML = '<p>No NFTs yet—mint one to start growing!</p>';
+            container.style.display = 'none';
+            guestPitch.style.display = 'block';
             return;
         }
+
+        container.style.display = 'flex';
+        guestPitch.style.display = 'none';
+
         let html = '';
         nfts.forEach((nft, index) => {
             const stageName = nft.name || 'Lemon Seed';
@@ -722,21 +744,34 @@ async function updateNFTDisplay(containerId, showButtons = true) {
                     onerror="this.onerror=null; this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/magicseed.png'; console.log('NFT image failed:', '${imageUri}')" 
                     style="max-width: 200px;">
                 <p>${stageName}</p>
-                <p>Mint Address: ${mintAddress.slice(0, 8)}...</p>
-                <div class="nft-card-buttons">`;
+                <p>Mint Address: ${mintAddress.slice(0, 8)}...</p>`;
+            if (staked && nft.stakeEnd) {
+                html += `<p>Locked Until: ${new Date(nft.stakeEnd).toLocaleDateString()}</p>`;
+            }
+            html += `<div class="nft-card-buttons">`;
             if (showButtons) {
-                html += `<button class="nft-card-button ${staked ? 'unstake-btn' : 'stake-btn'}" 
-                    onclick="${staked ? 'unstakeNFT' : 'stakeNFT'}('${mintAddress}'); event.stopPropagation();">
-                    ${staked ? 'Unstake' : 'Stake'}
-                </button>`;
+                if (staked) {
+                    html += `<button class="nft-card-button unstake-btn" 
+                        onclick="unstakeNFT('${mintAddress}'); event.stopPropagation();">Unstake</button>`;
+                } else {
+                    html += `
+                        <select id="lock-period-${mintAddress}" onchange="updateStakeButton('${mintAddress}')">
+                            <option value="1">1 Month</option>
+                            <option value="3">3 Months</option>
+                            <option value="6">6 Months</option>
+                            <option value="9">9 Months</option>
+                            <option value="12">12 Months</option>
+                        </select>
+                        <button class="nft-card-button stake-btn" 
+                            onclick="stakeNFT('${mintAddress}'); event.stopPropagation();">Stake</button>`;
+                }
                 html += `<button class="nft-card-button evolve-btn" onclick="evolveNFT('${mintAddress}', this); event.stopPropagation();" 
                     ${canEvolve ? '' : 'disabled'}>Evolve</button>`;
             }
-            html += '</div></div>';
+            html += `</div></div>`;
         });
         console.log('[NFT Display] Generated HTML:', html);
         container.innerHTML = html;
-
 
         const cards = container.querySelectorAll('.nft-card');
         console.log('[NFTDisplay] Found NFT cards:', cards.length);
@@ -1559,7 +1594,7 @@ async function showContent(sectionId) {
     console.log(`showContent called with: ${sectionId}`);
 
 
-    const restrictedSections = ['profile', 'videos', 'staking', 'admin'];
+    const restrictedSections = ['profile', 'videos', 'admin'];
     const isRestricted = restrictedSections.includes(sectionId);
     const finalSectionId = (isRestricted && !loggedInUsername) ? 'home' : sectionId;
 
@@ -1575,7 +1610,7 @@ async function showContent(sectionId) {
 
 
         const sectionUpdates = {
-            'staking': () => loggedInUsername && updateNFTDisplay('nft-info'),
+            'staking': () => updateNFTDisplay('nft-info'),
             'forum': () => updatePostsDisplay(),
             'quests': () => updateQuestsDisplay(),
             'profile': () => loggedInUsername && updateProfileDisplay(),
@@ -1636,165 +1671,57 @@ function toggleAuth() {
  }
 
 
-
-
 async function mintNFT(button) {
     console.log('[Mint] === HEX VERSION LOADED ===');
     console.log('[Mint] === TWO TX MODE ===');
     console.log('[Mint] Checking Solana Web3 availability...');
-    if (!window.solana || !window.solana.isPhantom) {
-        alert('Phantom wallet not found! Please install Phantom.');
-        return;
-    }
-    console.log('[Mint] Solana Web3 confirmed:', window.solana);
-
-
-
-
-    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
-    button.classList.add('loading');
-
-
-
-
-    try {
-        await window.solana.connect();
-        const publicKey = window.solana.publicKey.toString();
-        console.log('[Mint] Phantom wallet connected:', publicKey);
-        console.log('[Mint] Fetching mint transaction...');
-        const username = loggedInUsername || 'tester';
-        if (!username) throw new Error('Please login to mint!');
-
-
-
-
-        const response = await fetch('https://www.lemonclubcollective.com/api/mint-nft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress: publicKey, username: username })
-        });
-
-
-
-
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-
-
-
-        const data = await response.json();
-        console.log('[Mint] Full Server Response:', data);
-        console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
-        const imageUri = `https://drahmlrfgetmm.cloudfront.net/usernft/nft_${Date.now()}.png`;
-
-
-
-
-        console.log('[Mint] Signing Tx1 with Phantom...');
-        if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
-        const tx1Buffer = new Uint8Array(data.transaction1.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        const transaction1 = solanaWeb3.Transaction.from(tx1Buffer);
-        const signedTx1 = await window.solana.signTransaction(transaction1);
-        const signature1 = await connection.sendRawTransaction(signedTx1.serialize());
-        console.log('[Mint] Transaction 1 Signature:', signature1);
-
-
-
-
-        const tx1Confirmation = await connection.confirmTransaction({
-            signature: signature1,
-            blockhash: transaction1.recentBlockhash,
-            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
-        }, { commitment: 'confirmed', maxRetries: 10 });
-        if (tx1Confirmation.value.err) throw new Error('Tx1 failed: ' + JSON.stringify(tx1Confirmation.value.err));
-        console.log('[Mint] Tx1 Confirmed');
-
-
-
-
-        console.log('[Mint] Signing Tx2 with Phantom...');
-        if (!data.transaction2) throw new Error('Transaction2 missing from server response!');
-        const tx2Buffer = new Uint8Array(data.transaction2.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        const transaction2 = solanaWeb3.Transaction.from(tx2Buffer);
-        const signedTx2 = await window.solana.signTransaction(transaction2);
-        const signature2 = await connection.sendRawTransaction(signedTx2.serialize());
-        console.log('[Mint] Transaction 2 Signature:', signature2);
-
-
-
-
-        const tx2Confirmation = await connection.confirmTransaction({
-            signature: signature2,
-            blockhash: transaction2.recentBlockhash,
-            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
-        }, { commitment: 'confirmed', maxRetries: 10 });
-        if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
-        console.log('[Mint] Tx2 Confirmed');
-
-
-
-
-        mintingPoints = bigInt(mintingPoints || 0).add(25);
-        lemonadePoints = bigInt(lemonadePoints || 0).add(25);
-        updatePointsDisplay();
-
-
-
-
-        await updateNFTDisplay('nft-info');
-        await updateQuestProgressClient('launch-party', 'limited', 1);
-        alert('NFT minted successfully with metadata! Check your Phantom wallet.');
-    } catch (error) {
-        console.error('[Mint] Error:', error);
-        console.log('[Mint] Logs:', error.logs || []);
-        alert('Failed to mint NFT: ' + error.message);
-    } finally {
-        button.classList.remove('loading');
-    }
+    showMintConfirmModal(button); // Trigger the modal instead of minting directly
 }
+
 async function stakeNFT(mintAddress) {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect wallet to stake!');
         return;
     }
-    const response = await fetch(`/stake/${loggedInUsername}/${mintAddress}`, {
-        method: 'POST',
-        credentials: 'include'
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-        await updateProfileDisplay();
-        await updateNFTDisplay('nft-info');
-        alert('NFT staked successfully!');
-    } else {
-        alert(result.error || 'Failed to stake NFT');
-    }
+    showStakeConfirmModal(mintAddress); // Trigger the modal instead of direct staking
 }
-        async function unstakeNFT(mintAddress) {
+   
+
+function updateStakeButton(mintAddress) {
+    // No-op for now—could add dynamic UI updates if needed
+    console.log(`[Stake] Lock period updated for ${mintAddress}`);
+}    
+
+async function unstakeNFT(mintAddress) {
     if (!loggedInUsername || !walletAddress) {
         alert('Please login and connect wallet to unstake!');
         return;
     }
-    const response = await fetch(`/unstake/${loggedInUsername}/${mintAddress}`, { 
-        method: 'POST',
-        credentials: 'include'
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-        await updateProfileDisplay();
-        await updateNFTDisplay('nft-info');
-        alert('NFT unstaked successfully!');
-    } else {
-        alert(result.error || 'Failed to unstake NFT');
+    const unstakeButton = event.currentTarget;
+    unstakeButton.classList.add('loading'); // Still applies cursor: wait
+    try {
+        const response = await fetch(`/unstake/${loggedInUsername}/${mintAddress}`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            await updateProfileDisplay();
+            await updateNFTDisplay('nft-info');
+            alert('NFT unstaked successfully!');
+        } else {
+            alert(result.error || 'Failed to unstake NFT');
+        }
+    } catch (error) {
+        console.error('[Unstake] Error:', error);
+        alert('Failed to unstake NFT: ' + error.message);
+    } finally {
+        unstakeButton.classList.remove('loading');
     }
 }
 
-
-
-
 let currentMintAddress = null;
 let currentButton = null;
-
 
 async function evolveNFT(mintAddress, button) {
     if (!loggedInUsername || !walletAddress) {
@@ -1806,20 +1733,10 @@ async function evolveNFT(mintAddress, button) {
         return;
     }
 
-
-    const points = bigInt(lemonadePoints || 0);
-    if (points.lt(10)) {
-        alert('Need 10 Lemonade Points to evolve!');
-        return;
-    }
-
-
-    // Store the mint address and button for confirmation
     currentMintAddress = mintAddress;
-    currentButton = button;
+    currentButton = button; // Capture the exact button clicked
+    console.log('[Evolve] Setting currentButton:', currentButton);
 
-
-    // Show the confirmation modal
     const modal = document.getElementById('evolve-confirm-modal');
     if (modal) {
         modal.classList.add('active');
@@ -1828,12 +1745,14 @@ async function evolveNFT(mintAddress, button) {
     }
 }
 
-
 async function confirmEvolve() {
-    if (!currentMintAddress || !currentButton) return;
-
-
-    currentButton.classList.add('loading');
+    if (!currentMintAddress || !currentButton) {
+        console.error('[ConfirmEvolve] Missing mintAddress or button');
+        closeEvolveConfirmModal();
+        return;
+    }
+ const evolveGif = document.getElementById('evolve-loading-gif');
+    if (evolveGif) evolveGif.style.display = 'block';
     try {
         const response = await fetch(`/evolve/${loggedInUsername}/${currentMintAddress}`, {
             method: 'GET',
@@ -1859,11 +1778,10 @@ async function confirmEvolve() {
         console.error('[Evolve] Client Error:', error);
         alert('Failed to evolve NFT: ' + error.message);
     } finally {
-        currentButton.classList.remove('loading');
+        if (evolveGif) evolveGif.style.display = 'none';
         closeEvolveConfirmModal();
     }
 }
-
 
 function closeEvolveConfirmModal() {
     const modal = document.getElementById('evolve-confirm-modal');
@@ -1874,20 +1792,221 @@ function closeEvolveConfirmModal() {
     currentButton = null;
 }
 
+let stakeMintAddress = null;
+
+function showStakeConfirmModal(mintAddress) {
+    stakeMintAddress = mintAddress;
+    const lockPeriodSelect = document.getElementById(`lock-period-${mintAddress}`);
+    const lockPeriodMonths = parseInt(lockPeriodSelect.value, 10);
+    const message = `Whoa, you’re locking in your NFT for ${lockPeriodMonths} month${lockPeriodMonths > 1 ? 's' : ''}! 🍋 Once staked, it’s stuck—no trading or selling ‘til it’s ripe, but you can still evolve it into a zesty masterpiece. Ready to grow some serious lemon vibes? Confirm to stake!`;
+    document.getElementById('stake-confirm-message').textContent = message;
+    const modal = document.getElementById('stake-confirm-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeStakeConfirmModal() {
+    const modal = document.getElementById('stake-confirm-modal');
+    if (modal) modal.classList.remove('active');
+    stakeMintAddress = null;
+}
+
+async function confirmStake() {
+    if (!stakeMintAddress) return;
+    const lockPeriodSelect = document.getElementById(`lock-period-${stakeMintAddress}`);
+    const lockPeriodMonths = parseInt(lockPeriodSelect.value, 10);
+    const stakeGif = document.getElementById('stake-loading-gif');
+    if (stakeGif) stakeGif.style.display = 'block';
+    try {
+        const response = await fetch(`/stake/${loggedInUsername}/${stakeMintAddress}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lockPeriodMonths }),
+            credentials: 'include'
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            await updateProfileDisplay();
+            await updateNFTDisplay('nft-info');
+            alert(`NFT staked successfully for ${lockPeriodMonths} month${lockPeriodMonths > 1 ? 's' : ''}!`);
+        } else {
+            alert(result.error || 'Failed to stake NFT');
+        }
+    } catch (error) {
+        console.error('[Stake] Error:', error);
+        alert('Failed to stake NFT: ' + error.message);
+    } finally {
+        if (stakeGif) stakeGif.style.display = 'none';
+        closeStakeConfirmModal();
+    }
+}
+
+let mintButton = null;
+
+function showMintConfirmModal(button) {
+    if (!window.solana || !window.solana.isPhantom) {
+        alert('Phantom wallet not found! Please install Phantom.');
+        return;
+    }
+    if (!loggedInUsername) {
+        alert('Please login to mint an NFT!');
+        return;
+    }
+    mintButton = button;
+    console.log('[Mint] Showing confirmation modal, button:', mintButton);
+    const modal = document.getElementById('mint-confirm-modal');
+    if (modal) {
+        modal.classList.add('active');
+    } else {
+        console.error('[MintConfirm] Modal element not found');
+    }
+}
+
+function closeMintConfirmModal() {
+    const modal = document.getElementById('mint-confirm-modal');
+    if (modal) modal.classList.remove('active');
+    mintButton = null;
+}
+
+async function confirmMint() {
+    if (!mintButton) return;
+    const mintGif = document.getElementById('mint-loading-gif');
+    if (mintGif) mintGif.style.display = 'block';
+    const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+    try {
+        await window.solana.connect();
+        const publicKey = window.solana.publicKey.toString();
+        console.log('[Mint] Phantom wallet connected:', publicKey);
+        console.log('[Mint] Fetching mint transaction...');
+        const username = loggedInUsername || 'tester';
+        if (!username) throw new Error('Please login to mint!');
+
+        const response = await fetch('https://www.lemonclubcollective.com/api/mint-nft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ walletAddress: publicKey, username: username })
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        console.log('[Mint] Full Server Response:', data);
+        console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
+        const imageUri = `https://drahmlrfgetmm.cloudfront.net/usernft/nft_${Date.now()}.png`;
+
+        console.log('[Mint] Signing Tx1 with Phantom...');
+        if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
+        const tx1Buffer = new Uint8Array(data.transaction1.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        const transaction1 = solanaWeb3.Transaction.from(tx1Buffer);
+        const signedTx1 = await window.solana.signTransaction(transaction1);
+        const signature1 = await connection.sendRawTransaction(signedTx1.serialize());
+        console.log('[Mint] Transaction 1 Signature:', signature1);
+
+        const tx1Confirmation = await connection.confirmTransaction({
+            signature: signature1,
+            blockhash: transaction1.recentBlockhash,
+            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
+        }, { commitment: 'confirmed', maxRetries: 10 });
+        if (tx1Confirmation.value.err) throw new Error('Tx1 failed: ' + JSON.stringify(tx1Confirmation.value.err));
+        console.log('[Mint] Tx1 Confirmed');
+
+        console.log('[Mint] Signing Tx2 with Phantom...');
+        if (!data.transaction2) throw new Error('Transaction2 missing from server response!');
+        const tx2Buffer = new Uint8Array(data.transaction2.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        const transaction2 = solanaWeb3.Transaction.from(tx2Buffer);
+        const signedTx2 = await window.solana.signTransaction(transaction2);
+        const signature2 = await connection.sendRawTransaction(signedTx2.serialize());
+        console.log('[Mint] Transaction 2 Signature:', signature2);
+
+        const tx2Confirmation = await connection.confirmTransaction({
+            signature: signature2,
+            blockhash: transaction2.recentBlockhash,
+            lastValidBlockHeight: (await connection.getBlockHeight()) + 150
+        }, { commitment: 'confirmed', maxRetries: 10 });
+        if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
+        console.log('[Mint] Tx2 Confirmed');
+
+        mintingPoints = bigInt(mintingPoints || 0).add(25);
+        lemonadePoints = bigInt(lemonadePoints || 0).add(25);
+        updatePointsDisplay();
+
+        await updateNFTDisplay('nft-info');
+        await updateQuestProgressClient('launch-party', 'limited', 1);
+        alert('NFT minted successfully with metadata! Check your Phantom wallet.');
+    } catch (error) {
+        console.error('[Mint] Error:', error);
+        console.log('[Mint] Logs:', error.logs || []);
+        alert('Failed to mint NFT: ' + error.message);
+    } finally {
+        if (mintGif) mintGif.style.display = 'none';
+        closeMintConfirmModal();
+    }
+}
 
 
-
-       
-        async function trackPost() {
+async function trackPost() {
             if (!loggedInUsername) return;
             await updateQuestProgressClient('citrus-explorer', 'daily', 1);
             await updateQuestProgressClient('lemon-bard', 'weekly', 1);
         }
 
+function showOrderHistory() {
+    if (!loggedInUsername) {
+        alert('Please login to view your order history!');
+        return;
+    }
+    const modal = document.getElementById('order-history-modal');
+    if (modal) {
+        modal.classList.add('active');
+        fetchOrderHistory();
+    } else {
+        console.error('[OrderHistory] Modal element not found');
+    }
+}
 
+function closeOrderHistoryModal() {
+    const modal = document.getElementById('order-history-modal');
+    if (modal) modal.classList.remove('active');
+}
 
+async function fetchOrderHistory() {
+    const content = document.getElementById('order-history-content');
+    try {
+        const response = await fetch(`/profile/${loggedInUsername}/orders`, {
+            method: 'GET',
+            credentials: 'include'
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+            if (result.orders && result.orders.length > 0) {
+                let html = '';
+                result.orders.forEach(order => {
+                    html += `
+                        <div class="order-history-item">
+                            <p><strong>Order ID:</strong> ${order.orderId}</p>
+                            <p><strong>Product:</strong> ${order.productTitle}</p>
+                            <img src="${order.image || 'https://via.placeholder.com/100'}" alt="${order.productTitle}">
+                            <p><strong>Date:</strong> ${new Date(order.timestamp).toLocaleString()}</p>
+                            <p><strong>Status:</strong> ${order.status || 'Pending'}</p>
+                        </div>
+                    `;
+                });
+                content.innerHTML = html;
+            } else {
+                content.innerHTML = `
+                    <p>No orders here yet!</p>
+                    <button onclick="showContent('store'); closeOrderHistoryModal()" style="margin: 10px; padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Get Merch</button>
+                `;
+            }
+        } else {
+            content.innerHTML = '<p>Error loading order history—try again!</p>';
+            console.error('[OrderHistory] Fetch failed:', result.error);
+        }
+    } catch (error) {
+        console.error('[OrderHistory] Error:', error);
+        content.innerHTML = '<p>Error loading order history—try again!</p>';
+    }
+}
 
-        async function trackSocialVisit() {
+ async function trackSocialVisit() {
             if (!loggedInUsername) return;
             try {
                 console.log('[SocialVisit] Tracking social link visit');
@@ -2139,8 +2258,6 @@ async function postBlog() {
 }
 
 
-
-
 async function toggleWalletConnection() {
     console.log('toggleWalletConnection called');
     const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');
@@ -2148,13 +2265,19 @@ async function toggleWalletConnection() {
         console.error('Connect Wallet button not found');
         return;
     }
+
+    if (!loggedInUsername) {
+        alert('Please login to connect your Solana wallet!');
+        showContent('home'); // Redirect to home for login
+        return;
+    }
+
     if (walletAddress) {
         disconnectWallet();
     } else if ('solana' in window) {
         console.log('Solana object found:', window.solana);
         const provider = window.solana;
         try {
-            // Force connect even if isConnected is true, to ensure we get the public key
             const response = await provider.connect();
             walletAddress = provider.publicKey?.toString();
             if (!walletAddress) {
@@ -2175,9 +2298,7 @@ async function toggleWalletConnection() {
 }
 
 
-
-
-        function disconnectWallet() {
+function disconnectWallet() {
             if (window.solana) window.solana.disconnect();
             walletAddress = null;
             const connectBtnStaking = document.getElementById('connect-wallet-btn-staking');

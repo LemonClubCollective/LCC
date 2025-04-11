@@ -45,7 +45,7 @@ const s3Client = new S3Client({
 
 
 // Constants
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 3001;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -479,7 +479,7 @@ async function initialize() {
 
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 8080) => {
+    const startServer = async (portToTry = process.env.PORT || 3001) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
@@ -503,7 +503,7 @@ async function initialize() {
 
 
             
-        if (!isPortFree && portToTry === (process.env.PORT || 8080) && retryCount < maxRetries) {
+        if (!isPortFree && portToTry === (process.env.PORT || 3001) && retryCount < maxRetries) {
                 retryCount++;
                 console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
                 return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() => startServer(port));
@@ -1667,19 +1667,28 @@ app.post('/printify-order', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
 
         const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
         const [firstName, ...lastNameParts] = fullName.split(' ');
         const lastName = lastNameParts.join(' ');
 
-
-        const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...';
+        const printifyApiToken = PRINTIFY_API_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'; // Use your env variable
         const shopId = '21660074';
 
+        // Fetch product details from Printify
+        const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const productData = await productResponse.json();
+        if (!productResponse.ok) {
+            throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+        }
 
         const orderData = {
             line_items: [{
@@ -1703,7 +1712,6 @@ app.post('/printify-order', async (req, res) => {
             }
         };
 
-
         const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
             method: 'POST',
             headers: {
@@ -1715,11 +1723,26 @@ app.post('/printify-order', async (req, res) => {
         const orderResult = await orderResponse.json();
         console.log('[PrintifyOrder] Response:', orderResult);
 
-
         if (!orderResponse.ok) {
             throw new Error(orderResult.errors?.reason || 'Failed to create order');
         }
 
+        // Store order with product details
+        const order = {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            image: productData.images[0]?.src || 'https://via.placeholder.com/100', // First image from gallery
+            timestamp: Date.now(),
+            status: 'Pending'
+        };
+        if (!user.orders) user.orders = [];
+        user.orders.push(order);
+        await db.collection('users').updateOne(
+            { username: { $regex: `^${username}$`, $options: 'i' } },
+            { $set: { orders: user.orders } }
+        );
+        users[username.toLowerCase()] = user;
+        await saveData(users, 'users');
 
         res.json({ success: true, orderId: orderResult.id });
     } catch (error) {
@@ -1728,6 +1751,21 @@ app.post('/printify-order', async (req, res) => {
     }
 });
 
+app.get('/profile/:username/orders', async (req, res) => {
+    try {
+        const { username } = req.params;
+        const lowerUsername = username.toLowerCase();
+        console.log(`[OrderHistory] Fetching orders for ${lowerUsername}`);
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
+        const orders = user.orders || [];
+        res.json({ success: true, orders });
+    } catch (error) {
+        console.error('[OrderHistory] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to fetch order history' });
+    }
+});
 
 // Existing /create-charge endpoint (added previously)
 app.post('/create-charge', async (req, res) => {
@@ -1828,8 +1866,7 @@ app.post('/create-paypal-order', async (req, res) => {
 
 
         const order = await paypalClientInstance.execute(request);
-        const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
-
+        const approvalUrl = order.result.links.find(link => link.rel === 'approve').href
 
         res.json({ success: true, url: approvalUrl });
     } catch (error) {
@@ -1852,19 +1889,11 @@ app.post('/delete-blog', async (req, res) => {
             console.log(`[DeleteBlog] User ${req.session.username} not admin`);
             return res.status(403).json({ error: 'Admin access required' });
         }
-
-
-
-
         const result = await db.collection('blogs').deleteOne({ _id: new ObjectId(id) });
         if (result.deletedCount === 0) {
             console.log(`[DeleteBlog] Blog not found: ${id}`);
             return res.status(404).json({ error: 'Blog not found' });
         }
-
-
-
-
         blogs = await db.collection('blogs').find().toArray();
         console.log(`[DeleteBlog] Admin ${req.session.username} deleted blog ${id}`);
         res.json({ success: true });
@@ -1874,45 +1903,26 @@ app.post('/delete-blog', async (req, res) => {
     }
 });
 
-
-
-
 app.post('/delete-post', async (req, res) => {
     try {
         const { postId } = req.body;
         console.log('[DeletePost] Attempting to delete post:', postId);
-
-
-
-
         // Check if user is logged in via session
         if (!req.session || !req.session.username) {
             console.log('[DeletePost] No session or username');
             return res.status(401).json({ error: 'Please log in' });
         }
-
-
-
-
         // Verify admin status
         const user = await db.collection('users').findOne({ username: req.session.username });
         if (!user || !user.isAdmin) {
             console.log('[DeletePost] User not admin:', req.session.username);
             return res.status(403).json({ error: 'Admin access required' });
         }
-
-
-
-
         const result = await db.collection('posts').deleteOne({ _id: new ObjectId(postId) });
         if (result.deletedCount === 0) {
             console.log('[DeletePost] Post not found:', postId);
             return res.status(404).json({ error: 'Post not found' });
         }
-
-
-
-
         posts = await db.collection('posts').find().toArray();
         console.log(`[DeletePost] Admin ${req.session.username} deleted post ${postId}`);
         res.json({ success: true });
@@ -1921,9 +1931,6 @@ app.post('/delete-post', async (req, res) => {
         res.status(500).json({ error: 'Failed to delete post' });
     }
 });
-
-
-
 
 app.post('/upload-profile-pic/:username', async (req, res) => {
     try {
@@ -1947,8 +1954,6 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
                 console.log('[UploadProfilePic] No file uploaded');
                 return res.status(400).json({ error: 'No file uploaded' });
             }
-
-
             const filename = `${Date.now()}.jpg`;
             console.log('[UploadProfilePic] Uploading to S3:', filename);
             const uploadParams = {
@@ -1957,8 +1962,6 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
                 Body: req.file.buffer,
                 ContentType: 'image/jpeg',
             };
-
-
             try {
                 const uploadPromise = s3Client.send(new PutObjectCommand(uploadParams));
                 const timeoutPromise = new Promise((_, reject) => {
@@ -1983,10 +1986,6 @@ app.post('/upload-profile-pic/:username', async (req, res) => {
 });
 
 
-
-
-
-
 app.post('/upload-video', async (req, res) => {
     try {
         const videoDir = path.join(__dirname, 'videos');
@@ -1996,10 +1995,6 @@ app.post('/upload-video', async (req, res) => {
         } else {
             console.log(`[VideoUpload] Using existing videos directory: ${videoDir}`);
         }
-
-
-
-
         if (!req.session || !req.session.username) {
             return res.status(401).json({ error: 'Please log in' });
         }
@@ -2010,10 +2005,6 @@ app.post('/upload-video', async (req, res) => {
         if (!user.isAdmin && (!user.permissions || !user.permissions.canPostVideos)) {
             return res.status(403).json({ error: 'Permission to post videos required' });
         }
-
-
-
-
         const storage = multer.diskStorage({
             destination: (req, file, cb) => cb(null, videoDir),
             filename: (req, file, cb) => cb(null, `${Date.now()}_${file.originalname}`)
@@ -2022,10 +2013,6 @@ app.post('/upload-video', async (req, res) => {
             storage: storage,
             limits: { fileSize: 1024 * 1024 * 1024 } // 1GB limit
         }).single('video');
-
-
-
-
         upload(req, res, async (err) => {
             if (err) {
                 console.error('[VideoUpload] Multer error:', err.message);
@@ -2044,16 +2031,8 @@ app.post('/upload-video', async (req, res) => {
     ContentDisposition: 'inline', // Ensure it’s playable in the browser
 };
             await s3Client.send(new PutObjectCommand(uploadParams));
-
-
-
-
             // Delete the local file after uploading to S3
             fs.unlinkSync(req.file.path);
-
-
-
-
             // Use CloudFront URL
             const videoUrl = `https://d18hbxl467xhey.cloudfront.net/videos/${req.file.filename}`;
             const videoDoc = { title, description, url: videoUrl, timestamp: new Date().toISOString(), uploadedBy: req.session.username };
@@ -2070,18 +2049,12 @@ app.post('/upload-video', async (req, res) => {
 });
 
 
-
-
 app.post('/playtime/:username', async (req, res) => {
     try {
         const { username } = req.params;
         const { minutes } = req.body;
         if (!users[username.toLowerCase()]) return res.status(404).json({ success: false, error: 'User not found' });
         if (!minutes || minutes < 0) return res.status(400).json({ success: false, error: 'Invalid playtime' });
-
-
-
-
         const wholeMinutes = Math.floor(minutes);
         awardPoints(username.toLowerCase(), 'arcade', wholeMinutes, `Arcade Playtime (${wholeMinutes} minutes)`);
         updateQuestProgress(username.toLowerCase(), 'daily', 'arcade-play', wholeMinutes);
@@ -2096,8 +2069,6 @@ app.post('/playtime/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to update playtime' });
     }
 });
-
-
 
 
 app.post('/claim-victory/:username/:gameId', async (req, res) => {
@@ -2118,8 +2089,6 @@ app.post('/claim-victory/:username/:gameId', async (req, res) => {
 });
 
 
-
-
 app.post('/profile/:username', async (req, res) => {
     try {
         const { username } = req.params;
@@ -2131,8 +2100,6 @@ app.post('/profile/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch profile' });
     }
 });
-
-
 
 
 app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
@@ -2153,8 +2120,6 @@ app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to update profile pic' });
     }
 });
-
-
 
 
 app.post('/quests/:username/update', async (req, res) => {
@@ -2186,8 +2151,6 @@ app.post('/quests/:username/update', async (req, res) => {
 });
 
 
-
-
 app.post('/nft/:username', async (req, res) => {
     try {
         const { username } = req.params;
@@ -2199,8 +2162,6 @@ app.post('/nft/:username', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch NFTs' });
     }
 });
-
-
 
 
 app.get('/profile/:username', async (req, res) => {
@@ -2229,8 +2190,6 @@ app.get('/profile/:username', async (req, res) => {
 });
 
 
-
-
 app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -2253,8 +2212,6 @@ app.post('/profile/:username/update-pic', requireAdmin, async (req, res) => {
 });
 
 
-
-
 app.get('/api/quests/:username', async (req, res) => {
     console.log(`[Quest Fetch] Fetching quests for ${req.params.username}`);
     try {
@@ -2272,8 +2229,6 @@ app.get('/api/quests/:username', async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to fetch quests' });
     }
 });
-
-
 
 
 app.get('/nft/:username', async (req, res) => {
@@ -2349,29 +2304,23 @@ app.get('/nft/:username', async (req, res) => {
 });
 
 
-
-
-
-
 app.post('/stake/:username/:mintAddress', async (req, res) => {
     try {
         const { username, mintAddress } = req.params;
+        const { lockPeriodMonths } = req.body; // New parameter
         const lowerUsername = username.toLowerCase();
-        console.log(`[Stake] Attempting to stake NFT ${mintAddress} for ${lowerUsername}`);
+        console.log(`[Stake] Attempting to stake NFT ${mintAddress} for ${lowerUsername} with lock period ${lockPeriodMonths} months`);
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-
-
 
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft || nft.staked) return res.status(400).json({ success: false, error: 'NFT not found or already staked' });
 
-
-
-
+        const now = Date.now();
+        const lockPeriodMs = lockPeriodMonths * 30 * 24 * 60 * 60 * 1000; // Convert months to milliseconds (approx 30 days/month)
         nft.staked = true;
-        nft.stakeStart = Date.now();
+        nft.stakeStart = now;
+        nft.stakeEnd = now + lockPeriodMs; // Store end date
         user.stakingPoints = (user.stakingPoints || 0) + 50;
         updateQuestProgress(lowerUsername, 'weekly', 'grove-keeper', 1);
         await db.collection('users').updateOne(
@@ -2380,7 +2329,7 @@ app.post('/stake/:username/:mintAddress', async (req, res) => {
         );
         users[lowerUsername] = user; // Sync in-memory
         await saveData(users, 'users');
-        console.log(`[Stake] Success: ${lowerUsername} staked ${mintAddress}, +50 staking points`);
+        console.log(`[Stake] Success: ${lowerUsername} staked ${mintAddress} until ${new Date(nft.stakeEnd).toISOString()}, +50 staking points`);
         res.json({ success: true });
     } catch (error) {
         console.error('[Stake] Error:', error.message);
@@ -2389,9 +2338,6 @@ app.post('/stake/:username/:mintAddress', async (req, res) => {
 });
 
 
-
-
-// server.js, replace entire function at line 2500
 app.post('/unstake/:username/:mintAddress', async (req, res) => {
     try {
         const { username, mintAddress } = req.params;
@@ -2400,17 +2346,22 @@ app.post('/unstake/:username/:mintAddress', async (req, res) => {
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-
-
-
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft || !nft.staked) return res.status(400).json({ success: false, error: 'NFT not found or not staked' });
 
-
-
+        const now = Date.now();
+        if (nft.stakeEnd && now < nft.stakeEnd) {
+            const remainingMs = nft.stakeEnd - now;
+            const remainingDays = Math.ceil(remainingMs / (1000 * 60 * 60 * 24));
+            return res.status(400).json({ 
+                success: false, 
+                error: `NFT is locked until ${new Date(nft.stakeEnd).toLocaleDateString()} (${remainingDays} days remaining)` 
+            });
+        }
 
         nft.staked = false;
         nft.stakeStart = 0;
+        nft.stakeEnd = 0; // Reset end date
         await db.collection('users').updateOne(
             { username: { $regex: `^${username}$`, $options: 'i' } },
             { $set: user }
@@ -2425,13 +2376,6 @@ app.post('/unstake/:username/:mintAddress', async (req, res) => {
     }
 });
 
-
-
-
-
-
-
-
 app.get('/evolve/:username/:mintAddress', async (req, res) => {
     try {
         const { username, mintAddress } = req.params;
@@ -2442,22 +2386,10 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
             console.log(`[Evolve] User not found: ${username}`);
             return res.status(404).json({ success: false, error: 'User not found' });
         }
-
-
-
-
         const lemonadePoints = getLemonadePoints(lowerUsername);
         if (lemonadePoints < 10) return res.status(400).json({ success: false, error: 'Not enough Lemonade Points' });
-
-
-
-
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft) return res.status(404).json({ success: false, error: 'NFT not found' });
-
-
-
-
         const baseStageName = nft.name.split('#')[0].trim();
         console.log(`[Evolve] Attempting to evolve NFT ${mintAddress}, current stage: ${nft.name}, baseStageName: ${baseStageName}`);
         const stageMap = { 'Lemon Seed': 'Lemon Sprout', 'Lemon Sprout': 'Lemon Sapling', 'Lemon Sapling': 'Lemon Tree' };
@@ -2465,25 +2397,13 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
             console.log(`[Evolve] Cannot evolve further - baseStageName ${baseStageName} not in stageMap`);
             return res.status(400).json({ success: false, error: 'NFT cannot evolve further' });
         }
-
-
-
-
         const oldStage = nft.name;
         const newStageBase = stageMap[baseStageName];
         nft.name = `${newStageBase} #${oldStage.split('#')[1]}`;
         console.log(`[Evolve] NFT ${mintAddress} evolved from ${oldStage} to ${nft.name}`);
-
-
-
-
         const tokenId = Date.now();
         const { imagePath, metadataPath } = await generateNFT(tokenId, newStageBase);
         nft.imageUri = imagePath; // Use the CloudFront URL
-
-
-
-
         const mintPublicKey = new PublicKey(mintAddress);
         try { // Added missing opening brace
             const metadataAccount = await metaplex.nfts().findByMint({ mintAddress: mintPublicKey });
@@ -2497,10 +2417,6 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
         } catch (error) {
             console.warn(`[Evolve] Metadata update failed for ${mintAddress}: ${error.message}. Proceeding without on-chain metadata update.`);
         }
-
-
-
-
         const categories = [
             { name: 'stakingPoints', value: BigInt(user.stakingPoints || 0) },
             { name: 'arcadePoints', value: BigInt(user.arcadePoints || 0) },
@@ -2508,10 +2424,6 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
             { name: 'mintingPoints', value: BigInt(user.mintingPoints || 0) },
             { name: 'bonusPoints', value: BigInt(user.bonusPoints || 0) }
         ];
-
-
-
-
         const totalPoints = categories.reduce((sum, cat) => sum + cat.value, BigInt(0));
         if (totalPoints > 0) {
             let pointsToDeduct = BigInt(10);
@@ -2529,9 +2441,7 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
         }
 
 
-
-
-        await db.collection('users').updateOne(
+await db.collection('users').updateOne(
             { username: { $regex: `^${username}$`, $options: 'i' } },
             { $set: user }
         );
@@ -2555,12 +2465,9 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
 
 
 
-
 app.get('/solana-web3.js', (req, res) => {
     res.sendFile(path.join(__dirname, 'node_modules', '@solana', 'web3.js', 'dist', 'index.js'));
 });
-
-
 
 
 app.post('/posts', async (req, res) => {
@@ -2591,8 +2498,6 @@ app.post('/posts', async (req, res) => {
         res.status(500).json({ error: 'Failed to submit post', details: error.message });
     }
 });
-
-
 
 
 app.post('/posts/comment', async (req, res) => {
@@ -2633,8 +2538,6 @@ app.post('/posts/comment', async (req, res) => {
 });
 
 
-
-
 app.post('/posts/comment/reply', async (req, res) => {
     try {
         if (!loggedInUsername) return res.status(401).json({ error: 'Please log in to reply' });
@@ -2657,15 +2560,6 @@ app.post('/posts/comment/reply', async (req, res) => {
     }
 });
 
-
-
-
-// [Unchanged imports and setup]
-
-
-
-
-// Update /posts/like to return a better message
 app.post('/posts/like', async (req, res) => {
     try {
         const { wallet, postId } = req.body;
@@ -2695,8 +2589,6 @@ app.post('/posts/like', async (req, res) => {
 });
 
 
-
-
 // Update /posts/like-comment to handle missing _id gracefully
 app.post('/posts/like-comment', async (req, res) => {
     try {
@@ -2708,36 +2600,20 @@ app.post('/posts/like-comment', async (req, res) => {
         if (!post) {
             return res.status(404).json({ error: 'Post not found' });
         }
-
-
-
-
         const comment = post.comments.find(c => c._id && c._id.toString() === commentId);
         if (!comment) {
             return res.status(404).json({ error: 'Comment not found' });
         }
-
-
-
-
         comment.likedBy = comment.likedBy || [];
         if (comment.likedBy.includes(wallet)) {
             return res.status(400).json({ error: 'You have already liked this comment' });
         }
         comment.likedBy.push(wallet);
         comment.likes = (comment.likes || 0) + 1;
-
-
-
-
         await db.collection('posts').updateOne(
             { _id: new ObjectId(postId), 'comments._id': new ObjectId(commentId) },
             { $set: { 'comments.$': comment } }
         );
-
-
-
-
         posts = await db.collection('posts').find().toArray();
         res.json({ success: true, likes: comment.likes });
     } catch (error) {
@@ -2748,66 +2624,37 @@ app.post('/posts/like-comment', async (req, res) => {
 
 
 
-
 // [Unchanged remaining endpoints]
 app.post('/posts/delete-comment', async (req, res) => {
     try {
         const { postId, commentId } = req.body;
         console.log('[DeleteComment] Attempting to delete comment:', commentId, 'from post:', postId);
-
-
-
-
         if (!req.session || !req.session.username) {
             console.log('[DeleteComment] No session or username');
             return res.status(401).json({ error: 'Please log in' });
         }
-
-
-
-
         const user = await db.collection('users').findOne({ username: req.session.username });
         if (!user || !user.isAdmin) {
             console.log('[DeleteComment] User not admin:', req.session.username);
             return res.status(403).json({ error: 'Admin access required' });
         }
-
-
-
-
         const post = await db.collection('posts').findOne({ _id: new ObjectId(postId) });
         if (!post) {
             return res.status(404).json({ error: 'Post not found' });
         }
-
-
-
-
         const result = await db.collection('posts').updateOne(
             { _id: new ObjectId(postId) },
             { $pull: { comments: { _id: new ObjectId(commentId) } } }
         );
-
-
-
-
         if (result.modifiedCount === 0) {
             console.log('[DeleteComment] Comment not found:', commentId);
             return res.status(404).json({ error: 'Comment not found' });
         }
-
-
-
-
         // Also remove any replies to this comment
         await db.collection('posts').updateOne(
             { _id: new ObjectId(postId) },
             { $pull: { comments: { parentId: new ObjectId(commentId) } } }
         );
-
-
-
-
         posts = await db.collection('posts').find().toArray();
         console.log(`[DeleteComment] Admin ${req.session.username} deleted comment ${commentId} from post ${postId}`);
         res.json({ success: true });
@@ -2818,8 +2665,6 @@ app.post('/posts/delete-comment', async (req, res) => {
 });
 
 
-
-
 app.post('/submit-ticket', async (req, res) => {
     try {
         const { name, email, message } = req.body;
@@ -2828,8 +2673,6 @@ app.post('/submit-ticket', async (req, res) => {
             console.log('[SubmitTicket] Missing required fields:', { name, email, message });
             return res.status(400).json({ error: 'All fields required' });
         }
-
-
         const sesParams = {
             Source: 'matthew.kobilan@gmail.com', // Use verified email for testing
             Destination: {
@@ -2846,8 +2689,6 @@ app.post('/submit-ticket', async (req, res) => {
                 }
             }
         };
-
-
         console.log('[SubmitTicket] Sending email with SES params:', sesParams);
         const command = new SendEmailCommand(sesParams);
         await transporter.send(command); // transporter is your SESClient instance
@@ -2859,17 +2700,10 @@ app.post('/submit-ticket', async (req, res) => {
     }
 });
 
-
-
-
-
-
 app.get('/videos', (req, res) => {
     console.log('[Videos] Returning:', videos);
     res.json({ success: true, videos });
 });
-
-
 
 
 app.post('/blog-posts', async (req, res) => {
@@ -2881,28 +2715,16 @@ app.post('/blog-posts', async (req, res) => {
         if (!user || !user.isAdmin) {
             return res.status(403).json({ error: 'Admin access required' });
         }
-
-
-
-
         const { title, content } = req.body;
         if (!title || !content) {
             return res.status(400).json({ error: 'Title and content are required' });
         }
-
-
-
-
         const newBlog = {
             title,
             content,
             timestamp: Date.now(),
             uploadedBy: req.session.username
         };
-
-
-
-
         await db.collection('blogs').insertOne(newBlog);
         blogs = await db.collection('blogs').find().toArray();
         res.json({ success: true });
@@ -2911,8 +2733,6 @@ app.post('/blog-posts', async (req, res) => {
         res.status(500).json({ error: 'Failed to post blog' });
     }
 });
-
-
 
 
 app.get('/blog-posts', async (req, res) => {
@@ -2924,8 +2744,6 @@ app.get('/blog-posts', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch blog posts' });
     }
 });
-
-
 
 
 app.get('/posts', async (req, res) => {
@@ -2940,21 +2758,15 @@ app.get('/posts', async (req, res) => {
 });
 
 
-
-
 app.get('/tickets', requireAdmin, (req, res) => {
     res.json({ success: true, tickets });
 });
-
-
 
 
 app.post('/logout', (req, res) => {
     loggedInUsername = null;
     res.json({ success: true });
 });
-
-
 
 
 app.post('/section-visit/:username', async (req, res) => {
@@ -2971,8 +2783,6 @@ app.post('/section-visit/:username', async (req, res) => {
 });
 
 
-
-
 app.post('/social-visit/:username', async (req, res) => {
     try {
         const { username } = req.params;
@@ -2983,8 +2793,7 @@ app.post('/social-visit/:username', async (req, res) => {
         if (!quest) {
             console.error(`[SocialVisit] Quest social-squeeze not found for ${lowerUsername}`);
             return res.status(400).json({ success: false, error: 'Quest not found' });
-        }
-        
+        }       
         console.log(`[SocialVisit] Before - ${lowerUsername} - social-squeeze: ${quest.progress}/${quest.goal}`);
         await updateQuestProgress(lowerUsername, 'daily', 'social-squeeze', 1);
         console.log(`[SocialVisit] After - ${lowerUsername} - social-squeeze: ${quest.progress}/${quest.goal}, completed: ${quest.completed}`);
@@ -3003,17 +2812,11 @@ app.post('/social-visit/:username', async (req, res) => {
 });
 
 
-
-
 app.post('/checkout', async (req, res) => {
     try {
         const { username } = req.body;
         if (!username) return res.status(400).json({ error: 'Username required' });
-        if (!users[username]) return res.status(404).json({ error: 'User not found' });
-
-
-
-
+        if (!users[username]) return res.status(404).json({ error: 'User not found' })
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
@@ -3037,8 +2840,6 @@ app.post('/checkout', async (req, res) => {
 });
 
 
-
-
 app.get('/success', async (req, res) => {
     try {
         const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
@@ -3058,13 +2859,9 @@ app.get('/success', async (req, res) => {
 });
 
 
-
-
 app.get('/cancel', (req, res) => {
     res.send('Payment canceled. <a href="/">Return to site</a>');
 });
-
-
 
 
 app.post('/coinbase-checkout', async (req, res) => {
@@ -3072,10 +2869,6 @@ app.post('/coinbase-checkout', async (req, res) => {
         const { username } = req.body;
         if (!username) return res.status(400).json({ error: 'Username required' });
         if (!users[username]) return res.status(404).json({ error: 'User not found' });
-
-
-
-
         const chargeData = {
             name: 'Lemon Club Premium Membership',
             description: 'One-time purchase for premium access',
@@ -3090,8 +2883,6 @@ app.post('/coinbase-checkout', async (req, res) => {
         res.status(500).json({ error: 'Failed to create Coinbase checkout' });
     }
 });
-
-
 
 
 app.post('/coinbase-webhook', express.json(), async (req, res) => {
@@ -3110,8 +2901,6 @@ app.post('/coinbase-webhook', express.json(), async (req, res) => {
 });
 
 
-
-
 app.get('/store-items', (req, res) => {
     res.json([
         { id: 1, name: 'Water Droplets', price: 100, description: 'Boost your NFT growth with water droplets!' },
@@ -3120,34 +2909,20 @@ app.get('/store-items', (req, res) => {
 });
 
 
-
-
 app.post('/store/purchase/:username/:itemId', async (req, res) => {
     try {
         const { username, itemId } = req.params;
         if (!users[username]) return res.status(404).json({ success: false, error: 'User not found' });
-
-
-
-
         const items = [
             { id: 1, name: 'Water Droplets', price: 100, description: 'Boost your NFT growth with water droplets!' },
             { id: 2, name: 'Bonus Points Pack', price: 200, description: 'Get 200 bonus points instantly!' }
         ];
         const item = items.find(i => i.id === parseInt(itemId));
         if (!item) return res.status(400).json({ success: false, error: 'Item not found' });
-
-
-
-
         const lemonadePoints = getLemonadePoints(username);
         if (BigInt(lemonadePoints) < BigInt(item.price)) {
             return res.status(400).json({ success: false, error: 'Not enough points' });
         }
-
-
-
-
         if (item.id === 1) {
             users[username].waterDroplets = (users[username].waterDroplets || 0) + 100;
         } else if (item.id === 2) {
@@ -3169,12 +2944,8 @@ app.post('/create-stripe-checkout', async (req, res) => {
         if (!username || !amount) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
-
-
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
@@ -3190,8 +2961,6 @@ app.post('/create-stripe-checkout', async (req, res) => {
             cancel_url: `http://localhost:8080/cancel`,
             metadata: { username }
         });
-
-
         res.json({ success: true, url: session.url });
     } catch (error) {
         console.error('[CreateStripeCheckout] Error:', error.message);
@@ -3206,12 +2975,8 @@ app.post('/create-paypal-order', async (req, res) => {
         if (!username || !amount) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
-
-
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-
         const request = new paypal.orders.OrdersCreateRequest();
         request.prefer("return=representation");
         request.requestBody({
@@ -3229,11 +2994,8 @@ app.post('/create-paypal-order', async (req, res) => {
             }
         });
 
-
         const order = await paypalClient.execute(request);
         const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
-
-
         res.json({ success: true, url: approvalUrl });
     } catch (error) {
         console.error('[CreatePayPalOrder] Error:', error.message);
@@ -3248,12 +3010,8 @@ app.post('/create-sol-transaction', async (req, res) => {
         if (!userWallet || !amount) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
-
-
         const userPubkey = new PublicKey(userWallet);
         const lamports = Math.round(amount * solanaWeb3.LAMPORTS_PER_SOL); // Convert USD to SOL (approx)
-
-
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: userPubkey,
@@ -3261,13 +3019,9 @@ app.post('/create-sol-transaction', async (req, res) => {
                 lamports: lamports
             })
         );
-
-
         const { blockhash } = await connection.getLatestBlockhash();
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = userPubkey;
-
-
         const serializedTx = transaction.serialize({ requireAllSignatures: false });
         res.json({ success: true, transaction: Buffer.from(serializedTx).toString('base64') });
     } catch (error) {
@@ -3282,17 +3036,9 @@ app.post('/apply-water/:username/:mintAddress', async (req, res) => {
         const { username, mintAddress } = req.params;
         const user = await db.collection('users').findOne({ username });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
-
-
-
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft || !nft.staked) return res.status(400).json({ success: false, error: 'NFT not found or not staked' });
         if (!user.waterDroplets || user.waterDroplets < 10) return res.status(400).json({ success: false, error: 'Not enough water droplets' });
-
-
-
-
         user.waterDroplets -= 10;
         const pointsEarned = 5;
         awardPoints(username, 'staking', pointsEarned, `Watering NFT ${mintAddress.slice(0, 8)}...`);
@@ -3303,8 +3049,6 @@ app.post('/apply-water/:username/:mintAddress', async (req, res) => {
         res.status(500).json({ error: 'Failed to apply water droplets' });
     }
 });
-
-
 
 
 app.post('/admin/update-ticket/:ticketId', requireAdmin, async (req, res) => {
@@ -3323,8 +3067,6 @@ app.post('/admin/update-ticket/:ticketId', requireAdmin, async (req, res) => {
 });
 
 
-
-
 app.post('/admin/update-user/:username', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -3339,8 +3081,6 @@ app.post('/admin/update-user/:username', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to update user' });
     }
 });
-
-
 
 
 app.post('/admin/update-quests', requireAdmin, async (req, res) => {
@@ -3373,8 +3113,6 @@ app.post('/admin/update-quests', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'Failed to update quests' });
     }
 });
-
-
 
 
 app.post('/admin/reset-user/:username', requireAdmin, async (req, res) => {
@@ -3412,8 +3150,6 @@ app.post('/admin/reset-user/:username', requireAdmin, async (req, res) => {
 });
 
 
-
-
 app.post('/admin/ban-user/:username', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -3429,8 +3165,6 @@ app.post('/admin/ban-user/:username', requireAdmin, async (req, res) => {
 });
 
 
-
-
 app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, res) => {
     try {
         const { username } = req.params;
@@ -3440,8 +3174,6 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
             console.log(`[AdminUpdatePermissions] User not found: ${username}`);
             return res.status(404).json({ error: 'User not found' });
         }
-
-
 
 
         const updates = {};
@@ -3460,8 +3192,7 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
 
 
 
-
-        await db.collection('users').updateOne(
+await db.collection('users').updateOne(
             { username: { $regex: `^${username}$`, $options: 'i' } },
             { $set: updates }
         );
@@ -3473,8 +3204,6 @@ app.post('/admin/update-user-permissions/:username', requireAdmin, async (req, r
         res.status(500).json({ error: 'Failed to update user permissions: ' + error.message });
     }
 });
-
-
 
 
 async function setLeviAsAdmin() {
@@ -3501,20 +3230,14 @@ async function setLeviAsAdmin() {
 }
 
 
-
-
 console.log('[Route Check] Registered GET routes:', app._router.stack
     .filter(r => r.route && r.route.methods.get)
     .map(r => r.route.path));
 
 
-
-
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
-
 
 
 // Ensure initialize runs only once
