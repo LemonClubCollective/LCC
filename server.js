@@ -35,7 +35,7 @@ const Client = CoinbaseCommerce.Client;
 Client.init(process.env.COINBASE_API_KEY);
 const Charge = CoinbaseCommerce.resources.Charge;
 const paypal = require('@paypal/checkout-server-sdk');
-const paypalClient = new paypal.core.SandboxEnvironment(
+const paypalClient = new paypal.core.PayPalHttpClient(new paypal.core.LiveEnvironment(
     process.env.PAYPAL_CLIENT_ID,
     process.env.PAYPAL_CLIENT_SECRET
 );
