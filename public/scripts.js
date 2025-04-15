@@ -580,7 +580,6 @@ async function completePurchase() {
         return;
     }
 
-
     const shipping = {
         firstName: document.getElementById('checkout-first-name').value.trim(),
         lastName: document.getElementById('checkout-last-name').value.trim(),
@@ -592,16 +591,13 @@ async function completePurchase() {
         country: document.getElementById('checkout-country').value.trim()
     };
 
-
     if (Object.values(shipping).some(v => !v)) {
         alert('Please fill all shipping fields!');
         return;
     }
 
-
     const method = document.getElementById('payment-method').value;
     const address = `${shipping.firstName} ${shipping.lastName}, ${shipping.street}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
-
 
     try {
         let paymentResult;
@@ -613,7 +609,13 @@ async function completePurchase() {
             const chargeResponse = await fetch('/create-charge', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: loggedInUsername, amount: window.currentPrice }),
+                body: JSON.stringify({ 
+                    username: loggedInUsername, 
+                    amount: window.currentPrice,
+                    productId: window.currentProductId,
+                    variantId: window.currentVariantId,
+                    address: address
+                }),
                 credentials: 'include'
             });
             paymentResult = await chargeResponse.json();
@@ -621,11 +623,19 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create charge');
             }
             window.open(paymentResult.chargeUrl, '_blank');
+            alert('Please complete the payment. Your order will be placed after payment confirmation.');
+            document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'stripe') {
             const stripeResponse = await fetch('/create-stripe-checkout', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: loggedInUsername, amount: window.currentPrice }),
+                body: JSON.stringify({ 
+                    username: loggedInUsername, 
+                    amount: window.currentPrice,
+                    productId: window.currentProductId,
+                    variantId: window.currentVariantId,
+                    address: address
+                }),
                 credentials: 'include'
             });
             paymentResult = await stripeResponse.json();
@@ -633,12 +643,19 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
             }
             window.open(paymentResult.url, '_blank');
-            return;
+            alert('Please complete the payment. Your order will be placed after payment confirmation.');
+            document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'paypal') {
             const paypalResponse = await fetch('/create-paypal-order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: loggedInUsername, amount: window.currentPrice }),
+                body: JSON.stringify({ 
+                    username: loggedInUsername, 
+                    amount: window.currentPrice,
+                    productId: window.currentProductId,
+                    variantId: window.currentVariantId,
+                    address: address
+                }),
                 credentials: 'include'
             });
             paymentResult = await paypalResponse.json();
@@ -646,7 +663,8 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create PayPal order');
             }
             window.open(paymentResult.url, '_blank');
-            return;
+            alert('Please complete the payment. Your order will be placed after payment confirmation.');
+            document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'sol') {
             if (!walletAddress) {
                 alert('Connect Solana wallet to pay with SOL!');
@@ -657,7 +675,10 @@ async function completePurchase() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     userWallet: walletAddress, 
-                    amount: window.currentPrice 
+                    amount: window.currentPrice,
+                    productId: window.currentProductId,
+                    variantId: window.currentVariantId,
+                    address: address
                 }),
                 credentials: 'include'
             });
@@ -666,31 +687,35 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create SOL transaction');
             }
 
-
             const transaction = solanaWeb3.Transaction.from(Buffer.from(paymentResult.transaction, 'base64'));
             const signature = await window.solana.signAndSendTransaction(transaction);
             await solanaWeb3.connection.confirmTransaction(signature);
-            alert('SOL payment successful! Signature: ' + signature);
-        }
 
+            const orderResponse = await fetch('/printify-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    username: loggedInUsername, 
+                    productId: window.currentProductId, 
+                    variantId: window.currentVariantId,
+                    address: address
+                }),
+                credentials: 'include'
+            });
+            const orderResult = await orderResponse.json();
+            if (orderResult.success) {
+                await fetch('/cleanup-pending-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transactionId: paymentResult.transaction }),
+                    credentials: 'include'
+                });
 
-        const orderResponse = await fetch('/printify-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                username: loggedInUsername, 
-                productId: window.currentProductId, 
-                variantId: window.currentVariantId,
-                address: address
-            }),
-            credentials: 'include'
-        });
-        const orderResult = await orderResponse.json();
-        if (orderResult.success) {
-            alert('Order placed! ID: ' + orderResult.orderId);
-            document.getElementById('checkout-modal').classList.remove('active');
-        } else {
-            throw new Error(orderResult.error || 'Failed to place order');
+                alert('Order placed! ID: ' + orderResult.orderId);
+                document.getElementById('checkout-modal').classList.remove('active');
+            } else {
+                throw new Error(orderResult.error || 'Failed to place order');
+            }
         }
     } catch (error) {
         console.error('[CompletePurchase] Error:', error.message);

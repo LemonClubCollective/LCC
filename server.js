@@ -1835,27 +1835,42 @@ app.get('/profile/:username/orders', async (req, res) => {
     }
 });
 
-// Existing /create-charge endpoint (added previously)
 app.post('/create-charge', async (req, res) => {
     try {
-        const { username, amount } = req.body;
-        if (!username || !amount) {
+        const { username, amount, productId, variantId, address } = req.body;
+        if (!username || !amount || !productId || !variantId || !address) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
 
         const chargeData = {
             name: 'Lemon Club Merch Purchase',
             description: `Purchase for ${username}`,
             pricing_type: 'fixed_price',
             local_price: { amount: amount.toFixed(2), currency: 'USD' },
-            metadata: { username }
+            metadata: { 
+                username,
+                productId,
+                variantId,
+                address,
+                type: 'merch_purchase' // Add a type to distinguish this charge
+            }
         };
         const charge = await Charge.create(chargeData);
+
+        // Store the pending order in MongoDB
+        await db.collection('pending_orders').insertOne({
+            chargeId: charge.id,
+            username,
+            productId,
+            variantId,
+            address,
+            amount,
+            createdAt: Date.now()
+        });
+
         res.json({ success: true, chargeUrl: charge.hosted_url });
     } catch (error) {
         console.error('[CreateCharge] Error:', error.message);
@@ -2966,9 +2981,104 @@ app.post('/coinbase-webhook', express.json(), async (req, res) => {
     try {
         const event = req.body.event;
         if (event.type === 'charge:confirmed') {
-            const username = event.data.metadata.username;
-            users[username].isPremium = true;
-            await saveData(users, 'users');
+            const metadata = event.data.metadata;
+            const username = metadata.username;
+            const chargeId = event.data.id;
+
+            if (metadata.type === 'merch_purchase') {
+                // Find the pending order
+                const pendingOrder = await db.collection('pending_orders').findOne({ chargeId });
+                if (!pendingOrder) {
+                    console.error('[CoinbaseWebhook] Pending order not found for charge:', chargeId);
+                    return res.sendStatus(200);
+                }
+
+                // Place the Printify order
+                const { productId, variantId, address } = pendingOrder;
+                const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+                const [firstName, ...lastNameParts] = fullName.split(' ');
+                const lastName = lastNameParts.join(' ');
+
+                const countryCode = countryToIsoCode[country];
+                if (!countryCode) {
+                    throw new Error(`Unsupported country: ${country}`);
+                }
+
+                const printifyApiToken = process.env.PRINTIFY_API_KEY;
+                const shopId = process.env.PRINTIFY_SHOP_ID;
+
+                const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
+                    method: 'GET',
+                    headers: {
+                        Authorization: `Bearer ${printifyApiToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const productData = await productResponse.json();
+                if (!productResponse.ok) {
+                    throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+                }
+
+                const orderData = {
+                    line_items: [{
+                        product_id: productId,
+                        variant_id: variantId,
+                        quantity: 1
+                    }],
+                    shipping_method: 1,
+                    send_shipping_notification: true,
+                    address_to: {
+                        first_name: firstName,
+                        last_name: lastName || '',
+                        email: user.email,
+                        phone: 'N/A',
+                        country: countryCode,
+                        region: state,
+                        address1: street,
+                        address2: '',
+                        city: city,
+                        zip: zip
+                    }
+                };
+
+                const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${printifyApiToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+                const orderResult = await orderResponse.json();
+                console.log('[PrintifyOrder] Response:', orderResult);
+
+                if (!orderResponse.ok) {
+                    throw new Error(orderResult.errors?.reason || 'Failed to create order');
+                }
+
+                // Store order with product details
+                const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+                const order = {
+                    orderId: orderResult.id,
+                    productTitle: productData.title,
+                    image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+                    timestamp: Date.now(),
+                    status: 'Pending'
+                };
+                if (!user.orders) user.orders = [];
+                user.orders.push(order);
+                await db.collection('users').updateOne(
+                    { username: { $regex: `^${username}$`, $options: 'i' } },
+                    { $set: { orders: user.orders } }
+                );
+
+                // Clean up the pending order
+                await db.collection('pending_orders').deleteOne({ chargeId });
+            } else {
+                // Existing premium membership logic
+                users[username].isPremium = true;
+                await saveData(users, 'users');
+            }
         }
         res.sendStatus(200);
     } catch (error) {
@@ -3017,27 +3127,47 @@ app.post('/store/purchase/:username/:itemId', async (req, res) => {
 
 app.post('/create-stripe-checkout', async (req, res) => {
     try {
-        const { username, amount } = req.body;
-        if (!username || !amount) {
+        const { username, amount, productId, variantId, address } = req.body;
+        if (!username || !amount || !productId || !variantId || !address) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
                 price_data: {
                     currency: 'usd',
                     product_data: { name: 'Lemon Club Merch Purchase' },
-                    unit_amount: Math.round(amount * 100) // Convert to cents
+                    unit_amount: Math.round(amount * 100)
                 },
                 quantity: 1
             }],
             mode: 'payment',
-            success_url: `http://localhost:8080/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `http://localhost:8080/cancel`,
-            metadata: { username }
+            success_url: `https://www.lemonclubcollective.com/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `https://www.lemonclubcollective.com/cancel`,
+            metadata: { 
+                username,
+                productId,
+                variantId,
+                address,
+                type: 'merch_purchase'
+            }
         });
+
+        await db.collection('pending_orders').insertOne({
+            sessionId: session.id,
+            username,
+            productId,
+            variantId,
+            address,
+            amount,
+            paymentMethod: 'stripe',
+            createdAt: Date.now()
+        });
+
         res.json({ success: true, url: session.url });
     } catch (error) {
         console.error('[CreateStripeCheckout] Error:', error.message);
@@ -3046,14 +3176,120 @@ app.post('/create-stripe-checkout', async (req, res) => {
 });
 
 
+app.post('/stripe-webhook', express.json(), async (req, res) => {
+    try {
+        const event = req.body;
+        console.log('[StripeWebhook] Received:', JSON.stringify(event, null, 2));
+
+        if (event.type === 'checkout.session.completed') {
+            const session = event.data.object;
+            const metadata = session.metadata;
+            const username = metadata.username;
+            const sessionId = session.id;
+
+            const pendingOrder = await db.collection('pending_orders').findOne({ sessionId, paymentMethod: 'stripe' });
+            if (!pendingOrder) {
+                console.error('[StripeWebhook] Pending order not found for session:', sessionId);
+                return res.sendStatus(200);
+            }
+
+            const { productId, variantId, address } = pendingOrder;
+            const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+            const [firstName, ...lastNameParts] = fullName.split(' ');
+            const lastName = lastNameParts.join(' ');
+
+            const countryCode = countryToIsoCode[country];
+            if (!countryCode) {
+                throw new Error(`Unsupported country: ${country}`);
+            }
+
+            const printifyApiToken = process.env.PRINTIFY_API_KEY;
+            const shopId = process.env.PRINTIFY_SHOP_ID;
+
+            const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${printifyApiToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const productData = await productResponse.json();
+            if (!productResponse.ok) {
+                throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+            }
+
+            const orderData = {
+                line_items: [{
+                    product_id: productId,
+                    variant_id: variantId,
+                    quantity: 1
+                }],
+                shipping_method: 1,
+                send_shipping_notification: true,
+                address_to: {
+                    first_name: firstName,
+                    last_name: lastName || '',
+                    email: user.email,
+                    phone: 'N/A',
+                    country: countryCode,
+                    region: state,
+                    address1: street,
+                    address2: '',
+                    city: city,
+                    zip: zip
+                }
+            };
+
+            const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${printifyApiToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(orderData)
+            });
+            const orderResult = await orderResponse.json();
+            console.log('[PrintifyOrder] Response:', orderResult);
+
+            if (!orderResponse.ok) {
+                throw new Error(orderResult.errors?.reason || 'Failed to create order');
+            }
+
+            const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+            const order = {
+                orderId: orderResult.id,
+                productTitle: productData.title,
+                image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+                timestamp: Date.now(),
+                status: 'Pending'
+            };
+            if (!user.orders) user.orders = [];
+            user.orders.push(order);
+            await db.collection('users').updateOne(
+                { username: { $regex: `^${username}$`, $options: 'i' } },
+                { $set: { orders: user.orders } }
+            );
+
+            await db.collection('pending_orders').deleteOne({ sessionId });
+        }
+
+        res.sendStatus(200);
+    } catch (error) {
+        console.error('[StripeWebhook] Error:', error.message);
+        res.status(500).json({ error: 'Webhook processing failed' });
+    }
+});
+
 app.post('/create-paypal-order', async (req, res) => {
     try {
-        const { username, amount } = req.body;
-        if (!username || !amount) {
+        const { username, amount, productId, variantId, address } = req.body;
+        if (!username || !amount || !productId || !variantId || !address) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
+
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+
         const request = new paypal.orders.OrdersCreateRequest();
         request.prefer("return=representation");
         request.requestBody({
@@ -3066,13 +3302,26 @@ app.post('/create-paypal-order', async (req, res) => {
                 description: `Lemon Club Merch Purchase for ${username}`
             }],
             application_context: {
-                return_url: 'http://localhost:8080/success',
-                cancel_url: 'http://localhost:8080/cancel'
+                return_url: 'https://www.lemonclubcollective.com/success',
+                cancel_url: 'https://www.lemonclubcollective.com/cancel'
             }
         });
 
         const order = await paypalClient.execute(request);
         const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
+
+        // Store the pending order in MongoDB
+        await db.collection('pending_orders').insertOne({
+            orderId: order.result.id,
+            username,
+            productId,
+            variantId,
+            address,
+            amount,
+            paymentMethod: 'paypal',
+            createdAt: Date.now()
+        });
+
         res.json({ success: true, url: approvalUrl });
     } catch (error) {
         console.error('[CreatePayPalOrder] Error:', error.message);
@@ -3080,19 +3329,122 @@ app.post('/create-paypal-order', async (req, res) => {
     }
 });
 
+app.post('/paypal-webhook', express.json(), async (req, res) => {
+    try {
+        const event = req.body;
+        console.log('[PayPalWebhook] Received:', JSON.stringify(event, null, 2));
+
+        if (event.event_type === 'CHECKOUT.ORDER.APPROVED') {
+            const orderId = event.resource.id;
+            const username = event.resource.purchase_units[0].description.match(/Lemon Club Merch Purchase for (.+)/)[1];
+
+            // Find the pending order
+            const pendingOrder = await db.collection('pending_orders').findOne({ orderId, paymentMethod: 'paypal' });
+            if (!pendingOrder) {
+                console.error('[PayPalWebhook] Pending order not found for order:', orderId);
+                return res.sendStatus(200);
+            }
+
+            const { productId, variantId, address } = pendingOrder;
+            const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+            const [firstName, ...lastNameParts] = fullName.split(' ');
+            const lastName = lastNameParts.join(' ');
+
+            const countryCode = countryToIsoCode[country];
+            if (!countryCode) {
+                throw new Error(`Unsupported country: ${country}`);
+            }
+
+            const printifyApiToken = process.env.PRINTIFY_API_KEY;
+            const shopId = process.env.PRINTIFY_SHOP_ID;
+
+            const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${printifyApiToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const productData = await productResponse.json();
+            if (!productResponse.ok) {
+                throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+            }
+
+            const orderData = {
+                line_items: [{
+                    product_id: productId,
+                    variant_id: variantId,
+                    quantity: 1
+                }],
+                shipping_method: 1,
+                send_shipping_notification: true,
+                address_to: {
+                    first_name: firstName,
+                    last_name: lastName || '',
+                    email: user.email,
+                    phone: 'N/A',
+                    country: countryCode,
+                    region: state,
+                    address1: street,
+                    address2: '',
+                    city: city,
+                    zip: zip
+                }
+            };
+
+            const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${printifyApiToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(orderData)
+            });
+            const orderResult = await orderResponse.json();
+            console.log('[PrintifyOrder] Response:', orderResult);
+
+            if (!orderResponse.ok) {
+                throw new Error(orderResult.errors?.reason || 'Failed to create order');
+            }
+
+            const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+            const order = {
+                orderId: orderResult.id,
+                productTitle: productData.title,
+                image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+                timestamp: Date.now(),
+                status: 'Pending'
+            };
+            if (!user.orders) user.orders = [];
+            user.orders.push(order);
+            await db.collection('users').updateOne(
+                { username: { $regex: `^${username}$`, $options: 'i' } },
+                { $set: { orders: user.orders } }
+            );
+
+            await db.collection('pending_orders').deleteOne({ orderId });
+        }
+
+        res.sendStatus(200);
+    } catch (error) {
+        console.error('[PayPalWebhook] Error:', error.message);
+        res.status(500).json({ error: 'Webhook processing failed' });
+    }
+});
 
 app.post('/create-sol-transaction', async (req, res) => {
     try {
-        const { userWallet, amount } = req.body;
-        if (!userWallet || !amount) {
+        const { userWallet, amount, productId, variantId, address } = req.body;
+        if (!userWallet || !amount || !productId || !variantId || !address) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
+
         const userPubkey = new PublicKey(userWallet);
-        const lamports = Math.round(amount * solanaWeb3.LAMPORTS_PER_SOL); // Convert USD to SOL (approx)
+        const lamports = Math.round(amount * solanaWeb3.LAMPORTS_PER_SOL);
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: userPubkey,
-                toPubkey: wallet.publicKey, // Server wallet
+                toPubkey: wallet.publicKey,
                 lamports: lamports
             })
         );
@@ -3100,12 +3452,26 @@ app.post('/create-sol-transaction', async (req, res) => {
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = userPubkey;
         const serializedTx = transaction.serialize({ requireAllSignatures: false });
+
+        // Store the pending order
+        await db.collection('pending_orders').insertOne({
+            transactionId: serializedTx.toString('base64'),
+            userWallet,
+            productId,
+            variantId,
+            address,
+            amount,
+            paymentMethod: 'sol',
+            createdAt: Date.now()
+        });
+
         res.json({ success: true, transaction: Buffer.from(serializedTx).toString('base64') });
     } catch (error) {
         console.error('[CreateSolTransaction] Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
 
 
 app.post('/apply-water/:username/:mintAddress', async (req, res) => {
