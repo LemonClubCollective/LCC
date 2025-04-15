@@ -32,8 +32,6 @@ const fetch = require('node-fetch');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const CoinbaseCommerce = require('coinbase-commerce-node');
 const Client = CoinbaseCommerce.Client;
-const CoinbaseCommerce = require('coinbase-commerce-node');
-const Client = CoinbaseCommerce.Client;
 Client.init(process.env.COINBASE_API_KEY);
 const Charge = CoinbaseCommerce.resources.Charge;
 const paypal = require('@paypal/checkout-server-sdk');
@@ -66,7 +64,7 @@ const s3Client = new S3Client({
 
 
 // Constants
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 8080;
 const PRIMARY_RPC = 'https://api.devnet.solana.com';
 const FALLBACK_RPC = 'https://rpc.ankr.com/solana_devnet';
 const DATA_DIR = path.join(__dirname, 'data');
@@ -506,7 +504,7 @@ try {
 
 
  console.log('[Initialize] Starting server');
-    const startServer = async (portToTry = process.env.PORT || 3001) => {
+    const startServer = async (portToTry = process.env.PORT || 8080) => {
         try {
             const net = require('net');
             const checkPort = (port) => new Promise((resolve) => {
@@ -530,7 +528,7 @@ try {
 
 
             
-        if (!isPortFree && portToTry === (process.env.PORT || 3001) && retryCount < maxRetries) {
+        if (!isPortFree && portToTry === (process.env.PORT || 8080) && retryCount < maxRetries) {
                 retryCount++;
                 console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
                 return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() => startServer(port));
