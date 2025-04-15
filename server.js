@@ -1,6 +1,26 @@
 // Imports
 require('dotenv').config();
 const express = require('express');
+const requiredEnvVars = [
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'PRINTIFY_API_KEY',
+  'PRINTIFY_SHOP_ID',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_PUBLISHABLE_KEY',
+  'COINBASE_API_KEY',
+  'PAYPAL_CLIENT_ID',
+  'PAYPAL_CLIENT_SECRET',
+  'MONGO_URI',
+  'SESSION_SECRET',
+  'MAILERSEND_API_KEY'
+];
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+  console.error(`[Startup] Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  process.exit(1);
+}
 const { Connection, PublicKey, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram, TransactionInstruction } = require('@solana/web3.js');
 const { TOKEN_METADATA_PROGRAM_ID: IMPORTED_TOKEN_METADATA_PROGRAM_ID } = require('@metaplex-foundation/mpl-token-metadata');
 const fsPromises = require('fs').promises;
