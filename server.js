@@ -1711,6 +1711,16 @@ app.post('/delete-video', async (req, res) => {
     }
 });
 
+// Country name to ISO code mapping (partial list for now)
+const countryToIsoCode = {
+    'United States': 'US',
+    'Canada': 'CA',
+    'United Kingdom': 'GB',
+    'Australia': 'AU',
+    'Germany': 'DE',
+    'France': 'FR',
+    // Add more countries as needed
+};
 
 app.post('/printify-order', async (req, res) => {
     try {
@@ -1725,6 +1735,12 @@ app.post('/printify-order', async (req, res) => {
         const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
         const [firstName, ...lastNameParts] = fullName.split(' ');
         const lastName = lastNameParts.join(' ');
+
+        // Convert country name to ISO code
+        const countryCode = countryToIsoCode[country];
+        if (!countryCode) {
+            throw new Error(`Unsupported country: ${country}. Please use a supported country.`);
+        }
 
         const printifyApiToken = process.env.PRINTIFY_API_KEY;
         const shopId = process.env.PRINTIFY_SHOP_ID;
@@ -1748,14 +1764,14 @@ app.post('/printify-order', async (req, res) => {
                 variant_id: variantId,
                 quantity: 1
             }],
-            shipping_method: 1, // Hardcode to 1 (Standard Shipping) for now
+            shipping_method: 1,
             send_shipping_notification: true,
             address_to: {
                 first_name: firstName,
                 last_name: lastName || '',
                 email: user.email,
                 phone: 'N/A',
-                country: country,
+                country: countryCode, // Use ISO code
                 region: state,
                 address1: street,
                 address2: '',
