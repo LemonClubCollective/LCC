@@ -2060,6 +2060,9 @@ footer {
 </script>
    <script src="/solana-web3.js" onload="window.solanaWeb3 = window.solanaWeb3 || {}; window.solanaWeb3Loaded = true; console.log('Solana Web3 loaded locally, version:', solanaWeb3.version || 'unknown')" onerror="console.error('Failed to load Solana Web3 locally:', event)"></script>
     <script src="/node_modules/big-integer/big-integer.js" onload="console.log('bigInt loaded locally'); window.BigInteger = bigInt;" onerror="console.error('bigInt load failed');"></script>
+<script>
+  window.STRIPE_PUBLISHABLE_KEY = "{{STRIPE_PUBLISHABLE_KEY}}";
+</script>
        <script src="/scripts.js" defer></script>
 </body>
 </html>

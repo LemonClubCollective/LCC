@@ -7,17 +7,19 @@ const fsPromises = require('fs').promises;
 const fs = require('fs');
 const path = require('path');
 const splToken = require('@solana/spl-token');
-const PRINTIFY_API_KEY = process.env.PRINTIFY_API_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzN2Q0YmQzMDM1ZmUxMWU5YTgwM2FiN2VlYjNjY2M5NyIsImp0aSI6Ijg3YTQ3MzhiZmI0NzhiY2ExZDNiMWFmMGM5ZTY5YWIzYjAzOTA0ZmJlM2UxYWZjMWJjNDY4MDAwZDMxYTY2ZDc4NzAwMGRmMGY5YWUyMjQ5IiwiaWF0IjoxNzQzODcyNzQ4LjA2NzM0NCwibmJmIjoxNzQzODcyNzQ4LjA2NzM0NiwiZXhwIjoxNzc1NDA4NzQ4LjA2MTEwNywic3ViIjoiMjE4ODI2ODciLCJzY29wZXMiOlsic2hvcHMubWFuYWdlIiwic2hvcHMucmVhZCIsImNhdGFsb2cucmVhZCIsIm9yZGVycy5yZWFkIiwib3JkZXJzLndyaXRlIiwicHJvZHVjdHMucmVhZCIsInByb2R1Y3RzLndyaXRlIiwid2ViaG9va3MucmVhZCIsIndlYmhvb2tzLndyaXRlIiwidXBsb2Fkcy5yZWFkIiwidXBsb2Fkcy53cml0ZSIsInByaW50X3Byb3ZpZGVycy5yZWFkIiwidXNlci5pbmZvIl19.AMjxZYWVfUY7vqyPEBkN-WLPpmvuAfWk6xIL-M4Biff1p5jKXfFNAcVpOOwAwIB5wLNJKWPSodegK-8ibco';
+const PRINTIFY_API_KEY = process.env.PRINTIFY_API_KEY;
 const fetch = require('node-fetch');
-const stripe = require('stripe')('sk_test_51Qxc9v03zQcNJCYZCY8NEg0wC8LHnCd1c8OiWeqsOPyHKzBponH5gObOzGOdRgMnbcx3nCEQuzatt53kIrC9ScoA0022Lt1WDy');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const CoinbaseCommerce = require('coinbase-commerce-node');
 const Client = CoinbaseCommerce.Client;
-Client.init('989417de-057c-4d9f-9a80-30b2f29b8198');
+const CoinbaseCommerce = require('coinbase-commerce-node');
+const Client = CoinbaseCommerce.Client;
+Client.init(process.env.COINBASE_API_KEY);
 const Charge = CoinbaseCommerce.resources.Charge;
 const paypal = require('@paypal/checkout-server-sdk');
 const paypalClient = new paypal.core.SandboxEnvironment(
-    'AbfNpdOzyVqcNYi9tFHQvn7uwSCf_Iq7KENUf1ULzBBDIrvSpsD3baWkb2JgoRhQ8Y7XmLcN9DdwRHVV',
-    'EJUcvE5xdxUNu4ZAHLcXyV6RtAAksheVNRo58XtSbcvH71g1nI3HEG66BP-hM01AFAW8bDe66Y5WoXwz'
+    process.env.PAYPAL_CLIENT_ID,
+    process.env.PAYPAL_CLIENT_SECRET
 );
 const paypalClientInstance = new paypal.core.PayPalHttpClient(paypalClient);
 
@@ -36,11 +38,10 @@ const { S3Client, HeadObjectCommand, PutObjectCommand } = require('@aws-sdk/clie
 const s3Client = new S3Client({
     region: 'us-east-1',
     credentials: {
-        accessKeyId: 'AKIAW5WU5LN7HKW7BNXV',
-        secretAccessKey: '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'
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
     }
 });
-
 
 
 
@@ -389,7 +390,7 @@ async function initialize() {
 
 
 
-    const mongoUri = 'mongodb+srv://lemonclub:Think400Big!@lemonclub.dinfd.mongodb.net/?retryWrites=true&w=majority&appName=LemonClub';
+    const mongoUri = process.env.MONGO_URI;
     console.log('[Initialize] MongoDB URI:', mongoUri);
 
 
@@ -461,7 +462,7 @@ async function initialize() {
 console.log('[Initialize] Attempting MailerSend init');
 try {
   const mailerSend = new MailerSend({
-    apiKey: 'mlsn.66a574d36ec57f146e200353c4c1b095534665ad943b88d0f23528c7eed85209'
+    apiKey: process.env.MAILERSEND_API_KEY
   });
   transporter = {
     send: async (command) => {
@@ -637,8 +638,8 @@ const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 const lambdaClient = new LambdaClient({
     region: 'us-east-1',
     credentials: {
-        accessKeyId: 'AKIAW5WU5LN7HKW7BNXV',
-        secretAccessKey: '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'
+         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
     }
 });
 
@@ -849,7 +850,7 @@ function requirePermission(permission) {
 // Ensure session is initialized
 const session = require('express-session');
 app.use(session({
-    secret: 'bc9bdf51beca4d820288cf27171c9f33b7ace452aca29f71efecb812bb5e023b', 
+    secret: process.env.SESSION_SECRET, 
     resave: false,
     saveUninitialized: false,
      cookie: { 
@@ -1544,7 +1545,7 @@ app.post('/printify-webhook', express.json(), async (req, res) => {
         console.log(`[Webhook] Publishing started for product ${productId} in shop ${shopId}`);
 
 
-        const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'; // Your token
+       const printifyApiToken = process.env.PRINTIFY_API_KEY;
         const maxRetries = 3;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
@@ -1587,8 +1588,8 @@ app.post('/printify-webhook', express.json(), async (req, res) => {
 app.get('/printify-products', async (req, res) => {
     console.log('[Printify] Starting product fetch...');
     try {
-        const printifyApiToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIzN2Q0YmQzMDM1ZmUxMWU5YTgwM2FiN2VlYjNjY2M5NyIsImp0aSI6Ijg3YTQ3MzhiZmI0NzhiY2ExZDNiMWFmMGM5ZTY5YWIzYjAzOTA0ZmJlM2UxYWZjMWJjNDY4MDAwZDMxYTY2ZDc4NzAwMGRmMGY5YWUyMjQ5IiwiaWF0IjoxNzQzODcyNzQ4LjA2NzM0NCwibmJmIjoxNzQzODcyNzQ4LjA2NzM0NiwiZXhwIjoxNzc1NDA4NzQ4LjA2MTEwNywic3ViIjoiMjE4ODI2ODciLCJzY29wZXMiOlsic2hvcHMubWFuYWdlIiwic2hvcHMucmVhZCIsImNhdGFsb2cucmVhZCIsIm9yZGVycy5yZWFkIiwib3JkZXJzLndyaXRlIiwicHJvZHVjdHMucmVhZCIsInByb2R1Y3RzLndyaXRlIiwid2ViaG9va3MucmVhZCIsIndlYmhvb2tzLndyaXRlIiwidXBsb2Fkcy5yZWFkIiwidXBsb2Fkcy53cml0ZSIsInByaW50X3Byb3ZpZGVycy5yZWFkIiwidXNlci5pbmZvIl19.AMjxZYWVfUY7vqyPEBkN-WLPpmvuAfWk6xIL-M4Biff1p5jKXfFNAcVpOOwAwIB5wLNJKWPSodegK-8ibco';
-        const shopId = '21660074';
+        const printifyApiToken = process.env.PRINTIFY_API_KEY;
+        const shopId = process.env.PRINTIFY_SHOP_ID;
         console.log('[Printify] Using Shop ID:', shopId);
         const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/products.json`, {
             method: 'GET',
@@ -1680,8 +1681,8 @@ app.post('/printify-order', async (req, res) => {
         const [firstName, ...lastNameParts] = fullName.split(' ');
         const lastName = lastNameParts.join(' ');
 
-        const printifyApiToken = PRINTIFY_API_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...'; // Use your env variable
-        const shopId = '21660074';
+        const printifyApiToken = process.env.PRINTIFY_API_KEY;
+        const shopId = process.env.PRINTIFY_SHOP_ID;
 
         // Fetch product details from Printify
         const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
@@ -3251,7 +3252,15 @@ console.log('[Route Check] Registered GET routes:', app._router.stack
 
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  const indexPath = path.join(__dirname, 'public', 'index.html');
+  fs.readFile(indexPath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('[ServeIndex] Error reading index.html:', err);
+      return res.status(500).send('Error loading page');
+    }
+    const modifiedData = data.replace('{{STRIPE_PUBLISHABLE_KEY}}', process.env.STRIPE_PUBLISHABLE_KEY);
+    res.send(modifiedData);
+  });
 });
 
 

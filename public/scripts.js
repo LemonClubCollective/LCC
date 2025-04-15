@@ -80,13 +80,13 @@ console.log('Debug script executed before Solana Web3 load');
         let profilePicHistory = [];
         let lastScrollTop = 0;
         const gamePlaytimes = { 'big-dill': 0, 'owl-capone': 0, 'lenny-lemon': 0 };
-        const stripeClient = Stripe('pk_test_51Qxc9v03zQcNJCYZZPxGZKDuXZvINOWJA93uOptLggu4UtWPdTHfGfTKXf6TaGzsPFkLdDv2helvmmMBEopNijvO00EprZqruE');
         let postsToday = 0;
         let socialVisitsToday = 0;
         let arcadePlayToday = 0;
         let sectionsVisitedToday = new Set();
-                   
-        
+            
+	const stripeClient = Stripe(window.STRIPE_PUBLISHABLE_KEY);        
+     
         document.addEventListener('DOMContentLoaded', () => {
             // Debug roadmap image load
             const roadmapImg = document.querySelector('.roadmap-img');
