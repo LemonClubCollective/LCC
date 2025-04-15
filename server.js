@@ -1636,6 +1636,33 @@ app.get('/printify-products', async (req, res) => {
     }
 });
 
+app.get('/printify-shipping-methods', async (req, res) => {
+    try {
+        const printifyApiToken = process.env.PRINTIFY_API_KEY;
+        const shopId = process.env.PRINTIFY_SHOP_ID;
+        console.log('[PrintifyShipping] Fetching shipping methods for shop:', shopId);
+
+        const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/shipping_rates.json`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const data = await response.json();
+        console.log('[PrintifyShipping] Response status:', response.status);
+        console.log('[PrintifyShipping] Response data:', JSON.stringify(data, null, 2));
+
+        if (!response.ok) {
+            return res.status(response.status).json({ success: false, error: 'Failed to fetch shipping methods', details: data });
+        }
+
+        res.json({ success: true, shippingMethods: data || [] });
+    } catch (error) {
+        console.error('[PrintifyShipping] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to fetch shipping methods', details: error.message });
+    }
+});
 
 // server.js, replace /delete-video (around line 2678+)
 app.post('/delete-video', async (req, res) => {
@@ -1721,7 +1748,7 @@ app.post('/printify-order', async (req, res) => {
                 variant_id: variantId,
                 quantity: 1
             }],
-            shipping_method: 'STANDARD',
+            shipping_method: 1, // Hardcode to 1 (Standard Shipping) for now
             send_shipping_notification: true,
             address_to: {
                 first_name: firstName,
@@ -1756,7 +1783,7 @@ app.post('/printify-order', async (req, res) => {
         const order = {
             orderId: orderResult.id,
             productTitle: productData.title,
-            image: productData.images[0]?.src || 'https://via.placeholder.com/100', // First image from gallery
+            image: productData.images[0]?.src || 'https://via.placeholder.com/100',
             timestamp: Date.now(),
             status: 'Pending'
         };
