@@ -38,8 +38,7 @@ const paypal = require('@paypal/checkout-server-sdk');
 const paypalClient = new paypal.core.PayPalHttpClient(new paypal.core.LiveEnvironment(
     process.env.PAYPAL_CLIENT_ID,
     process.env.PAYPAL_CLIENT_SECRET
-);
-const paypalClientInstance = new paypal.core.PayPalHttpClient(paypalClient);
+));
 
 const { MailerSend, EmailParams, Sender, Recipient } = require('mailersend');
 const multer = require('multer');
@@ -1917,18 +1916,15 @@ app.post('/create-stripe-checkout', async (req, res) => {
 });
 
 
-// Add PayPal endpoint
 app.post('/create-paypal-order', async (req, res) => {
     try {
-        const { username, amount } = req.body;
-        if (!username || !amount) {
+        const { username, amount, productId, variantId, address } = req.body;
+        if (!username || !amount || !productId || !variantId || !address) {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
 
         const request = new paypal.orders.OrdersCreateRequest();
         request.prefer("return=representation");
@@ -1942,18 +1938,31 @@ app.post('/create-paypal-order', async (req, res) => {
                 description: `Lemon Club Merch Purchase for ${username}`
             }],
             application_context: {
-                return_url: 'http://localhost:8080/success',
-                cancel_url: 'http://localhost:8080/cancel'
+                return_url: 'https://www.lemonclubcollective.com/success',
+                cancel_url: 'https://www.lemonclubcollective.com/cancel'
             }
         });
 
+        console.log('[CreatePayPalOrder] Client ID:', process.env.PAYPAL_CLIENT_ID);
+        const order = await paypalClient.execute(request);
+        console.log('[CreatePayPalOrder] PayPal Response:', order.result);
 
-        const order = await paypalClientInstance.execute(request);
-        const approvalUrl = order.result.links.find(link => link.rel === 'approve').href
+        const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
+
+        await db.collection('pending_orders').insertOne({
+            orderId: order.result.id,
+            username,
+            productId,
+            variantId,
+            address,
+            amount,
+            paymentMethod: 'paypal',
+            createdAt: Date.now()
+        });
 
         res.json({ success: true, url: approvalUrl });
     } catch (error) {
-        console.error('[CreatePayPalOrder] Error:', error.message);
+        console.error('[CreatePayPalOrder] Error:', error.message, 'Response:', error.response?.text || 'No response');
         res.status(500).json({ success: false, error: error.message });
     }
 });
