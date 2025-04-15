@@ -21,7 +21,7 @@ const paypalClient = new paypal.core.SandboxEnvironment(
 );
 const paypalClientInstance = new paypal.core.PayPalHttpClient(paypalClient);
 
-
+const { MailerSend, EmailParams, Sender, Recipient } = require('mailersend');
 const multer = require('multer');
 const axios = require('axios');
 const { TOKEN_PROGRAM_ID: TokenProgramId, createInitializeMintInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createMintToInstruction, ASSOCIATED_TOKEN_PROGRAM_ID } = require('@solana/spl-token');
@@ -458,22 +458,28 @@ async function initialize() {
 
 
 
- console.log('[Initialize] Attempting SES init');
-    try {
-        const sesClient = new SESClient({
-            region: 'us-east-1',
-            credentials: {
-                accessKeyId: 'AKIAW5WU5LN7HKW7BNXV',
-            secretAccessKey: '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'
-         },
-            requestTimeout: 5000
-        });
-        transporter = sesClient;
-        console.log('[Initialize] SES transporter initialized successfully');
-    } catch (error) {
-        console.error('[Initialize] Failed to initialize SES transporter:', error.message);
-        transporter = null;
+console.log('[Initialize] Attempting MailerSend init');
+try {
+  const mailerSend = new MailerSend({
+    apiKey: 'mlsn.66a574d36ec57f146e200353c4c1b095534665ad943b88d0f23528c7eed85209'
+  });
+  transporter = {
+    send: async (command) => {
+      const { Source, Destination, Message } = command.input;
+      const emailParams = new EmailParams()
+        .setFrom(new Sender(Source, 'Lemon Club Collective'))
+        .setTo([new Recipient(Destination.ToAddresses[0])])
+        .setSubject(Message.Subject.Data)
+        .setText(Message.Body.Text?.Data || '')
+        .setHtml(Message.Body.Html?.Data || '');
+      return await mailerSend.email.send(emailParams);
     }
+  };
+  console.log('[Initialize] MailerSend transporter initialized successfully');
+} catch (error) {
+  console.error('[Initialize] Failed to initialize MailerSend transporter:', error.message);
+  transporter = null;
+}
 
 
 
@@ -956,7 +962,7 @@ app.post('/register', async (req, res) => {
 
         const verificationLink = `https://www.lemonclubcollective.com/verify-email/${username}/${verificationToken}`;
         const sesParams = {
-            Source: 'lemonclub@usa.com', // Verified sender for sandbox mode
+           Source: 'noreply@lemonclubcollective.com',
             Destination: {
                 ToAddresses: [email]
             },
@@ -2666,38 +2672,47 @@ app.post('/posts/delete-comment', async (req, res) => {
 
 
 app.post('/submit-ticket', async (req, res) => {
-    try {
-        const { name, email, message } = req.body;
-        console.log('[SubmitTicket] Received request:', { name, email, message });
-        if (!name || !email || !message) {
-            console.log('[SubmitTicket] Missing required fields:', { name, email, message });
-            return res.status(400).json({ error: 'All fields required' });
-        }
-        const sesParams = {
-            Source: 'matthew.kobilan@gmail.com', // Use verified email for testing
-            Destination: {
-                ToAddresses: ['matthew.kobilan@gmail.com'] // Use verified email for testing
-            },
-            Message: {
-                Body: {
-                    Text: {
-                        Data: `New Ticket\nName: ${name}\nEmail: ${email}\nMessage: ${message}`
-                    }
-                },
-                Subject: {
-                    Data: 'New Support Ticket'
-                }
-            }
-        };
-        console.log('[SubmitTicket] Sending email with SES params:', sesParams);
-        const command = new SendEmailCommand(sesParams);
-        await transporter.send(command); // transporter is your SESClient instance
-        console.log('[SubmitTicket] Email sent successfully');
-        res.json({ success: true, ticketId: tickets.length });
-    } catch (error) {
-        console.error('[SubmitTicket] Error:', error.message, error.stack);
-        res.status(500).json({ error: 'Failed to submit ticket', details: error.message });
+  try {
+    const { name, email, message } = req.body;
+    console.log('[SubmitTicket] Received request:', { name, email, message });
+    if (!name || !email || !message) {
+      console.log('[SubmitTicket] Missing required fields:', { name, email, message });
+      return res.status(400).json({ error: 'All fields required' });
     }
+    const ticketId = crypto.randomBytes(8).toString('hex');
+    const mailData = {
+      from: 'noreply@lemonclubcollective.com', 
+      to: 'matthew.kobilan@gmail.com',
+      subject: 'New Support Ticket',
+      text: `New Ticket\nTicket ID: ${ticketId}\nName: ${name}\nEmail: ${email}\nMessage: ${message}`,
+      html: `
+        <p><strong>New Support Ticket</strong></p>
+        <p><strong>Ticket ID:</strong> ${ticketId}</p>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Message:</strong> ${message}</p>
+      `
+    };
+    console.log('[SubmitTicket] Sending email with MailerSend:', mailData);
+    await transporter.send({
+      input: {
+        Source: mailData.from,
+        Destination: { ToAddresses: [mailData.to] },
+        Message: {
+          Subject: { Data: mailData.subject },
+          Body: {
+            Text: { Data: mailData.text },
+            Html: { Data: mailData.html }
+          }
+        }
+      }
+    });
+    console.log('[SubmitTicket] Email sent successfully');
+    res.json({ success: true, ticketId });
+  } catch (error) {
+    console.error('[SubmitTicket] Error:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to submit ticket', details: error.message });
+  }
 });
 
 app.get('/videos', (req, res) => {
