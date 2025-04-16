@@ -1898,55 +1898,78 @@ async function confirmMint() {
     if (mintGif) mintGif.style.display = 'block';
     const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
     try {
+        if (!window.solana || !window.solana.isPhantom) {
+            throw new Error('Phantom wallet not detected');
+        }
         await window.solana.connect();
-        const publicKey = window.solana.publicKey.toString();
+        const publicKey = window.solana.publicKey?.toString();
+        if (!publicKey) throw new Error('Failed to get wallet public key');
         console.log('[Mint] Phantom wallet connected:', publicKey);
+
+        // Check balance
+        const balance = await connection.getBalance(new solanaWeb3.PublicKey(publicKey));
+        const minBalanceNeeded = 0.1 * solanaWeb3.LAMPORTS_PER_SOL + 10000; // 0.1 SOL + fees
+        if (balance < minBalanceNeeded) {
+            throw new Error('Insufficient SOL balance (need ~0.101 SOL)');
+        }
+
         console.log('[Mint] Fetching mint transaction...');
-        const username = loggedInUsername || 'tester';
+        const username = loggedInUsername;
         if (!username) throw new Error('Please login to mint!');
 
         const response = await fetch('https://www.lemonclubcollective.com/api/mint-nft', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress: publicKey, username: username })
+            body: JSON.stringify({ walletAddress: publicKey, username })
         });
 
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Server error: ${response.status} - ${errorText}`);
+        }
         const data = await response.json();
-        console.log('[Mint] Full Server Response:', data);
-        console.log('[Mint] Mint Public Key from server:', data.mintPublicKey);
-        const imageUri = `https://drahmlrfgetmm.cloudfront.net/usernft/nft_${Date.now()}.png`;
+        console.log('[Mint] Server response:', data);
+
+        if (!data.transaction1 || !data.transaction2) {
+            throw new Error('Invalid transaction data from server');
+        }
 
         console.log('[Mint] Signing Tx1 with Phantom...');
-        if (!data.transaction1) throw new Error('Transaction1 missing from server response!');
         const tx1Buffer = new Uint8Array(data.transaction1.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
         const transaction1 = solanaWeb3.Transaction.from(tx1Buffer);
+        console.log('[Mint] Transaction 1 instructions:', transaction1.instructions.map(i => ({
+            programId: i.programId.toBase58(),
+            keys: i.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable })),
+            data: i.data.toString('hex')
+        })));
         const signedTx1 = await window.solana.signTransaction(transaction1);
         const signature1 = await connection.sendRawTransaction(signedTx1.serialize());
         console.log('[Mint] Transaction 1 Signature:', signature1);
 
-        const tx1Confirmation = await connection.confirmTransaction({
+        await connection.confirmTransaction({
             signature: signature1,
             blockhash: transaction1.recentBlockhash,
             lastValidBlockHeight: (await connection.getBlockHeight()) + 150
         }, { commitment: 'confirmed', maxRetries: 10 });
-        if (tx1Confirmation.value.err) throw new Error('Tx1 failed: ' + JSON.stringify(tx1Confirmation.value.err));
         console.log('[Mint] Tx1 Confirmed');
 
         console.log('[Mint] Signing Tx2 with Phantom...');
-        if (!data.transaction2) throw new Error('Transaction2 missing from server response!');
         const tx2Buffer = new Uint8Array(data.transaction2.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
         const transaction2 = solanaWeb3.Transaction.from(tx2Buffer);
+        console.log('[Mint] Transaction 2 instructions:', transaction2.instructions.map(i => ({
+            programId: i.programId.toBase58(),
+            keys: i.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable })),
+            data: i.data.toString('hex')
+        })));
         const signedTx2 = await window.solana.signTransaction(transaction2);
         const signature2 = await connection.sendRawTransaction(signedTx2.serialize());
         console.log('[Mint] Transaction 2 Signature:', signature2);
 
-        const tx2Confirmation = await connection.confirmTransaction({
+        await connection.confirmTransaction({
             signature: signature2,
             blockhash: transaction2.recentBlockhash,
             lastValidBlockHeight: (await connection.getBlockHeight()) + 150
         }, { commitment: 'confirmed', maxRetries: 10 });
-        if (tx2Confirmation.value.err) throw new Error('Tx2 failed: ' + JSON.stringify(tx2Confirmation.value.err));
         console.log('[Mint] Tx2 Confirmed');
 
         mintingPoints = bigInt(mintingPoints || 0).add(25);
@@ -1955,17 +1978,15 @@ async function confirmMint() {
 
         await updateNFTDisplay('nft-info');
         await updateQuestProgressClient('launch-party', 'limited', 1);
-        alert('NFT minted successfully with metadata! Check your Phantom wallet.');
+        alert('NFT minted successfully for 0.1 SOL! Check your Phantom wallet.');
     } catch (error) {
-        console.error('[Mint] Error:', error);
-        console.log('[Mint] Logs:', error.logs || []);
+        console.error('[Mint] Error:', error.message);
         alert('Failed to mint NFT: ' + error.message);
     } finally {
         if (mintGif) mintGif.style.display = 'none';
         closeMintConfirmModal();
     }
 }
-
 
 async function trackPost() {
             if (!loggedInUsername) return;

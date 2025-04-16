@@ -1278,17 +1278,11 @@ app.post('/api/mint-nft', async (req, res) => {
         }
         console.log('[Mint] Starting mint for:', username, walletAddress);
 
-
-
-
         // Ensure wallet is initialized
         if (!wallet) {
             console.error('[Mint] Server wallet not initialized');
             throw new Error('Server wallet not initialized');
         }
-
-
-
 
         // Initialize Solana connection and constants
         const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -1298,17 +1292,22 @@ app.post('/api/mint-nft', async (req, res) => {
         const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
         const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
+        // Define mint price (0.1 SOL in lamports)
+        const MINT_PRICE = 0.1 * LAMPORTS_PER_SOL; // 100,000,000 lamports
+        const projectWallet = wallet.publicKey; // Use server wallet as treasury
 
-
+        // Validate user balance
+        const balance = await connection.getBalance(userPubkey);
+        const minBalanceNeeded = MINT_PRICE + (await connection.getMinimumBalanceForRentExemption(82)) + 5000; // Mint price + rent + est. fees
+        if (balance < minBalanceNeeded) {
+            throw new Error('Insufficient SOL balance for minting (need ~0.101 SOL)');
+        }
 
         const mintKeypair = Keypair.generate();
         const mintPublicKey = mintKeypair.publicKey.toBase58();
         console.log('[Mint] Mint Pubkey:', mintPublicKey);
 
-
-
-
-        // Transaction 1: Create Mint, ATA, and Mint To
+        // Transaction 1: Create Mint, ATA, Mint To, and Transfer 0.1 SOL
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
         console.log('[Mint] Lamports fetched:', lamports);
         const tx1 = new Transaction().add(
@@ -1325,11 +1324,13 @@ app.post('/api/mint-nft', async (req, res) => {
                 wallet.publicKey, // Mint authority
                 null, // No freeze authority
                 TOKEN_PROGRAM_ID
-            )
+            ),
+            SystemProgram.transfer({
+                fromPubkey: userPubkey,
+                toPubkey: projectWallet,
+                lamports: MINT_PRICE
+            })
         );
-
-
-
 
         const tokenAccount = await getAssociatedTokenAddress(
             mintKeypair.publicKey,
@@ -1358,17 +1359,18 @@ app.post('/api/mint-nft', async (req, res) => {
             )
         );
 
-
-
+        // Log Transaction 1 instructions for debugging
+        console.log('[Mint] Transaction 1 instructions:', tx1.instructions.map(i => ({
+            programId: i.programId.toBase58(),
+            keys: i.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable })),
+            data: i.data.toString('hex')
+        })));
 
         // Generate NFT Assets via Lambda
         const tokenId = Date.now();
         console.log('[Mint] Generating NFT for tokenId:', tokenId);
         const { imagePath, metadataPath } = await generateNFT(tokenId, 'Lemon Seed');
         console.log('[Mint] Generated - Image:', imagePath, 'Metadata:', metadataPath);
-
-
-
 
         // Verify Metadata Accessibility in S3 and CloudFront
         const metadataKey = `usernft/nft_${tokenId}.json`;
@@ -1377,7 +1379,6 @@ app.post('/api/mint-nft', async (req, res) => {
         const maxAttempts = 10;
         while (attempts < maxAttempts) {
             try {
-                // Check S3 for both image and metadata
                 await s3Client.send(new HeadObjectCommand({
                     Bucket: 'lemonclub-nftgen',
                     Key: metadataKey
@@ -1386,7 +1387,6 @@ app.post('/api/mint-nft', async (req, res) => {
                     Bucket: 'lemonclub-nftgen',
                     Key: imageKey
                 }));
-                // Verify CloudFront accessibility
                 const metadataResponse = await axios.get(metadataPath, { responseType: 'json' });
                 const imageResponse = await axios.get(imagePath, { responseType: 'arraybuffer' });
                 console.log('[Mint] Metadata verified:', metadataPath, metadataResponse.data);
@@ -1400,9 +1400,6 @@ app.post('/api/mint-nft', async (req, res) => {
             }
         }
 
-
-
-
         // Transaction 2: Set Metadata
         const tx2 = new Transaction();
         const [metadataPDA] = PublicKey.findProgramAddressSync(
@@ -1411,44 +1408,34 @@ app.post('/api/mint-nft', async (req, res) => {
         );
         console.log('[Mint] Metadata PDA:', metadataPDA.toBase58());
 
-
-
-
         const name = `Lemon Seed #${tokenId}`;
         const symbol = 'LSEED';
-        const metadataUri = metadataPath; // Use generated metadata path
+        const metadataUri = metadataPath;
 
-
-
-
-        // Corrected Data Buffer for createMetadataAccountV3
         const dataBuffer = Buffer.concat([
             Buffer.from([33]), // Instruction discriminator
-            Buffer.from(Uint32Array.from([name.length]).buffer), // Name length
-            Buffer.from(name), // Name
-            Buffer.from(Uint32Array.from([symbol.length]).buffer), // Symbol length
-            Buffer.from(symbol), // Symbol
-            Buffer.from(Uint32Array.from([metadataUri.length]).buffer), // URI length
-            Buffer.from(metadataUri), // URI
-            Buffer.from(Uint16Array.from([500]).buffer), // Seller fee basis points (5%)
-            Buffer.from([0]), // Has creators: 0 (none)
-            Buffer.from([0]), // Has collection: 0 (none)
-            Buffer.from([0]), // Has uses: 0 (none)
-            Buffer.from([1]), // Is mutable: true
-            Buffer.from([0])  // Has collection details: 0 (none)
+            Buffer.from(Uint32Array.from([name.length]).buffer),
+            Buffer.from(name),
+            Buffer.from(Uint32Array.from([symbol.length]).buffer),
+            Buffer.from(symbol),
+            Buffer.from(Uint32Array.from([metadataUri.length]).buffer),
+            Buffer.from(metadataUri),
+            Buffer.from(Uint16Array.from([500]).buffer),
+            Buffer.from([0]),
+            Buffer.from([0]),
+            Buffer.from([0]),
+            Buffer.from([1]),
+            Buffer.from([0])
         ]);
-
-
-
 
         tx2.add(
             new TransactionInstruction({
                 keys: [
-                    { pubkey: metadataPDA, isSigner: false, isWritable: true }, // Metadata account
-                    { pubkey: mintKeypair.publicKey, isSigner: false, isWritable: false }, // Mint
-                    { pubkey: wallet.publicKey, isSigner: true, isWritable: false }, // Mint authority
-                    { pubkey: userPubkey, isSigner: true, isWritable: false }, // Payer
-                    { pubkey: wallet.publicKey, isSigner: true, isWritable: false }, // Update authority
+                    { pubkey: metadataPDA, isSigner: false, isWritable: true },
+                    { pubkey: mintKeypair.publicKey, isSigner: false, isWritable: false },
+                    { pubkey: wallet.publicKey, isSigner: true, isWritable: false },
+                    { pubkey: userPubkey, isSigner: true, isWritable: false },
+                    { pubkey: wallet.publicKey, isSigner: true, isWritable: false },
                     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
                     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false }
                 ],
@@ -1457,8 +1444,12 @@ app.post('/api/mint-nft', async (req, res) => {
             })
         );
 
-
-
+        // Log Transaction 2 instructions for debugging
+        console.log('[Mint] Transaction 2 instructions:', tx2.instructions.map(i => ({
+            programId: i.programId.toBase58(),
+            keys: i.keys.map(k => ({ pubkey: k.pubkey.toBase58(), isSigner: k.isSigner, isWritable: k.isWritable })),
+            data: i.data.toString('hex')
+        })));
 
         // Set Blockhash and Sign Transactions
         const { blockhash } = await connection.getLatestBlockhash();
@@ -1467,12 +1458,9 @@ app.post('/api/mint-nft', async (req, res) => {
         tx2.recentBlockhash = blockhash;
         tx1.feePayer = userPubkey;
         tx2.feePayer = userPubkey;
-        tx1.partialSign(mintKeypair, wallet); // Mint keypair and server wallet sign tx1
-        tx2.partialSign(wallet); // Server wallet signs tx2
+        tx1.partialSign(mintKeypair, wallet);
+        tx2.partialSign(wallet);
         console.log('[Mint] Transactions signed');
-
-
-
 
         // Update Database
         const lowerUsername = username.toLowerCase();
@@ -1483,7 +1471,7 @@ app.post('/api/mint-nft', async (req, res) => {
         user.nfts.push({
             mintAddress: mintPublicKey,
             name: name,
-            imageUri: imagePath, // Use generated image path
+            imageUri: imagePath,
             staked: false,
             stakeStart: 0,
             lastPoints: 0
@@ -1498,9 +1486,6 @@ app.post('/api/mint-nft', async (req, res) => {
         awardPoints(lowerUsername, 'minting', 25, `Minting NFT ${mintPublicKey.slice(0, 8)}...`);
         updateQuestProgress(lowerUsername, 'limited', 'launch-party', 1);
 
-
-
-
         // Send Response
         res.json({
             transaction1: Buffer.from(tx1.serialize({ requireAllSignatures: false })).toString('hex'),
@@ -1513,9 +1498,6 @@ app.post('/api/mint-nft', async (req, res) => {
         res.status(500).json({ error: 'Failed to prepare mint transaction', details: error.message });
     }
 });
-
-
-
 
 app.get('/check-nft/:mintAddress', async (req, res) => {
     const { mintAddress } = req.params;
