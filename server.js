@@ -1,5 +1,7 @@
 // Imports
 require('dotenv').config();
+const bs58 = require('bs58');
+const { Keypair } = require('@solana/web3.js');
 const requiredEnvVars = [
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
@@ -20,8 +22,23 @@ if (missingEnvVars.length > 0) {
   console.error(`[Startup] Missing required environment variables: ${missingEnvVars.join(', ')}`);
   process.exit(1);
 }
+let wallet; // Global wallet variable
+
+// Load wallet immediately
+(async () => {
+    try {
+        wallet = await loadWallet();
+	 console.log(`[Startup] Wallet loaded: ${wallet.publicKey.toBase58()}`);
+    } catch (error) {
+        console.error('[Startup] Failed to load wallet, exiting:', error.message);
+        process.exit(1);
+    }
+})();
 const express = require('express');
-const { Connection, PublicKey, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram, TransactionInstruction } = require('@solana/web3.js');
+console.log('[Debug] bs58 module:', bs58);
+console.log('[Debug] bs58.decode exists:', typeof bs58.decode === 'function');
+
+const { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, SystemProgram, TransactionInstruction } = require('@solana/web3.js');
 const { TOKEN_METADATA_PROGRAM_ID: IMPORTED_TOKEN_METADATA_PROGRAM_ID } = require('@metaplex-foundation/mpl-token-metadata');
 const fsPromises = require('fs').promises;
 const fs = require('fs');
@@ -50,7 +67,6 @@ const { exec } = require('child_process');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { MongoClient } = require('mongodb');
 const { ObjectId } = require('mongodb'); 
-const solanaWeb3 = require('@solana/web3.js');
 const { S3Client, HeadObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const s3Client = new S3Client({
     region: 'us-east-1',
@@ -154,7 +170,6 @@ let posts = [];
 let tickets = [];
 let blogs = [];
 let videos = [];
-let wallet;
 let connection;
 let metaplex;
 let transporter;
@@ -363,20 +378,25 @@ async function retryRPC(operation, maxAttempts = 5, delay = 1000) {
 }
 
 
-
-
 async function loadWallet() {
-  try {
-    const walletData = await fsPromises.readFile(path.join(__dirname, 'data', 'dev-wallet.json'), 'utf8');
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(walletData)));
-  } catch (error) {
-    console.error('[loadWallet] Error loading dev-wallet.json:', error.message);
-    throw new Error('Failed to load dev wallet');
-  }
+    try {
+        const privateKey = process.env.WALLET_PRIVATE_KEY;
+        console.log('[loadWallet] WALLET_PRIVATE_KEY from .env:', privateKey);
+        if (!privateKey) throw new Error('WALLET_PRIVATE_KEY not set in .env');
+        const secretKey = bs58.default.decode(privateKey);
+       const keypair = Keypair.fromSecretKey(secretKey); // Use standalone Keypair
+        const publicKey = keypair.publicKey.toString();
+        // Validate the public key (should be 44 characters, base58)
+        if (!/^[1-9A-HJ-NP-Za-km-z]{44}$/.test(publicKey)) {
+            throw new Error(`Invalid wallet public key: ${publicKey}`);
+        }
+        console.log(`[loadWallet] Wallet loaded: ${publicKey}`);
+        return keypair;
+    } catch (error) {
+        console.error('[loadWallet] Error loading wallet:', error.message);
+        throw new Error('Failed to load wallet');
+    }
 }
-
-
-
 
 let isInitialized = false; // Guard to prevent multiple calls
 
@@ -387,13 +407,7 @@ async function initialize() {
     if (isInitialized) return;
     isInitialized = true;
 
-
-
-
     console.log('[Initialize] Starting initialization');
-
-
-
 
     try {
         if (!fs.existsSync(DATA_DIR)) {
@@ -404,14 +418,8 @@ async function initialize() {
         console.error('[Initialize] Error creating data directory:', error.message);
     }
 
-
-
-
     const mongoUri = process.env.MONGO_URI;
     console.log('[Initialize] MongoDB URI:', mongoUri);
-
-
-
 
     let client;
     try {
@@ -447,22 +455,7 @@ async function initialize() {
         console.error('[Initialize] Proceeding without MongoDB');
     }
 
-
-
-
-    console.log('[Initialize] Attempting wallet load...');
-    try {
-        wallet = await loadWallet();
-        console.log(`[Init] Wallet loaded: ${wallet.publicKey.toString()}`);
-    } catch (error) {
-        console.error('[Initialize] Failed to load wallet:', error.message);
-        wallet = null;
-    }
-
-
-
-
-        console.log('[Initialize] Attempting Solana/Metaplex init');
+    console.log('[Initialize] Attempting Solana/Metaplex init');
     try {
         connection = new Connection(PRIMARY_RPC, 'confirmed');
         metaplex = wallet ? Metaplex.make(connection).use(keypairIdentity(wallet)) : null;
@@ -473,36 +466,30 @@ async function initialize() {
         metaplex = null;
     }
 
-
-
-
-console.log('[Initialize] Attempting MailerSend init');
-try {
-  const mailerSend = new MailerSend({
-    apiKey: process.env.MAILERSEND_API_KEY
-  });
-  transporter = {
-    send: async (command) => {
-      const { Source, Destination, Message } = command.input;
-      const emailParams = new EmailParams()
-        .setFrom(new Sender(Source, 'Lemon Club Collective'))
-        .setTo([new Recipient(Destination.ToAddresses[0])])
-        .setSubject(Message.Subject.Data)
-        .setText(Message.Body.Text?.Data || '')
-        .setHtml(Message.Body.Html?.Data || '');
-      return await mailerSend.email.send(emailParams);
+    console.log('[Initialize] Attempting MailerSend init');
+    try {
+        const mailerSend = new MailerSend({
+            apiKey: process.env.MAILERSEND_API_KEY
+        });
+        transporter = {
+            send: async (command) => {
+                const { Source, Destination, Message } = command.input;
+                const emailParams = new EmailParams()
+                    .setFrom(new Sender(Source, 'Lemon Club Collective'))
+                    .setTo([new Recipient(Destination.ToAddresses[0])])
+                    .setSubject(Message.Subject.Data)
+                    .setText(Message.Body.Text?.Data || '')
+                    .setHtml(Message.Body.Html?.Data || '');
+                return await mailerSend.email.send(emailParams);
+            }
+        };
+        console.log('[Initialize] MailerSend transporter initialized successfully');
+    } catch (error) {
+        console.error('[Initialize] Failed to initialize MailerSend transporter:', error.message);
+        transporter = null;
     }
-  };
-  console.log('[Initialize] MailerSend transporter initialized successfully');
-} catch (error) {
-  console.error('[Initialize] Failed to initialize MailerSend transporter:', error.message);
-  transporter = null;
-}
 
-
-
-
- console.log('[Initialize] Starting server');
+    console.log('[Initialize] Starting server');
     const startServer = async (portToTry = process.env.PORT || 8080) => {
         try {
             const net = require('net');
@@ -513,9 +500,6 @@ try {
                     .listen(port);
             });
 
-
-
-
             const isPortFree = await checkPort(portToTry);
             console.log(`[PortCheck] Port ${portToTry} is ${isPortFree ? 'free' : 'in use'}`);
             let retryCount = 0;
@@ -523,11 +507,7 @@ try {
             const retryDelay = 5000;
             const fallbackPort = 8080;
 
-
-
-
-            
-        if (!isPortFree && portToTry === (process.env.PORT || 8080) && retryCount < maxRetries) {
+            if (!isPortFree && portToTry === (process.env.PORT || 8080) && retryCount < maxRetries) {
                 retryCount++;
                 console.log(`[PortCheck] Port ${portToTry} is in use, retrying (${retryCount}/${maxRetries}) in ${retryDelay/1000} seconds...`);
                 return new Promise((resolve) => setTimeout(resolve, retryDelay)).then(() => startServer(port));
@@ -538,9 +518,6 @@ try {
                 console.error(`[PortCheck] Fallback port ${fallbackPort} is also in use. Proceeding without binding.`);
                 return;
             }
-
-
-
 
             const server = app.listen(portToTry, () => {
                 console.log(`Server running on http://localhost:${portToTry}`);
@@ -555,9 +532,6 @@ try {
                 setLeviAsAdmin();
             });
 
-
-
-
             server.on('error', (err) => {
                 console.error('[ServerError] Server error:', err.message);
             });
@@ -565,9 +539,6 @@ try {
             console.error('[startServer] Error starting server:', error.message);
         }
     };
-
-
-
 
     console.log('[Initialize] Starting server');
     await startServer();
@@ -1266,7 +1237,15 @@ app.post('/fix-timestamps', async (req, res) => {
 });
 
 
+console.log('[Debug] Global wallet before /api/mint-nft:', wallet ? wallet.publicKey.toBase58() : 'undefined');
 
+app.use((req, res, next) => {
+    if (!wallet || !wallet.publicKey) {
+        console.error('[Middleware] Wallet not loaded, rejecting request');
+        return res.status(500).json({ error: 'Server wallet not initialized' });
+    }
+    next();
+});
 
 app.post('/api/mint-nft', async (req, res) => {
     try {
@@ -1279,10 +1258,11 @@ app.post('/api/mint-nft', async (req, res) => {
         console.log('[Mint] Starting mint for:', username, walletAddress);
 
         // Ensure wallet is initialized
-        if (!wallet) {
+        if (!wallet || !wallet.publicKey) {
             console.error('[Mint] Server wallet not initialized');
             throw new Error('Server wallet not initialized');
         }
+	console.log('[Mint] Current wallet address:', wallet.publicKey.toBase58());
 
         // Initialize Solana connection and constants
         const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
@@ -1295,10 +1275,11 @@ app.post('/api/mint-nft', async (req, res) => {
         // Define mint price (0.1 SOL in lamports)
         const MINT_PRICE = 0.1 * LAMPORTS_PER_SOL; // 100,000,000 lamports
         const projectWallet = wallet.publicKey; // Use server wallet as treasury
+        console.log('[Mint] projectWallet address:', projectWallet.toBase58()); // Add this log
 
         // Validate user balance
         const balance = await connection.getBalance(userPubkey);
-        const minBalanceNeeded = MINT_PRICE + (await connection.getMinimumBalanceForRentExemption(82)) + 5000; // Mint price + rent + est. fees
+        const minBalanceNeeded = MINT_PRICE + (await connection.getMinimumBalanceForRentExemption(82)) + 5000;
         if (balance < minBalanceNeeded) {
             throw new Error('Insufficient SOL balance for minting (need ~0.101 SOL)');
         }
@@ -1306,6 +1287,7 @@ app.post('/api/mint-nft', async (req, res) => {
         const mintKeypair = Keypair.generate();
         const mintPublicKey = mintKeypair.publicKey.toBase58();
         console.log('[Mint] Mint Pubkey:', mintPublicKey);
+        
 
         // Transaction 1: Create Mint, ATA, Mint To, and Transfer 0.1 SOL
         const lamports = await connection.getMinimumBalanceForRentExemption(82);
@@ -2537,7 +2519,44 @@ await db.collection('users').updateOne(
     }
 });
 
+app.post('/withdraw-sol', async (req, res) => {
+    try {
+        const { destinationAddress, amount } = req.body;
+        if (!destinationAddress || !amount) {
+            return res.status(400).json({ error: 'Missing destination address or amount' });
+        }
+        const destinationPubkey = new PublicKey(destinationAddress);
+        const amountLamports = parseFloat(amount) * LAMPORTS_PER_SOL;
 
+        const connection = new Connection(PRIMARY_RPC, 'confirmed');
+        const balance = await connection.getBalance(wallet.publicKey);
+        if (balance < amountLamports + 5000) {
+            return res.status(400).json({ error: 'Insufficient balance for withdrawal' });
+        }
+
+        const transaction = new Transaction().add(
+            SystemProgram.transfer({
+                fromPubkey: wallet.publicKey,
+                toPubkey: destinationPubkey,
+                lamports: amountLamports
+            })
+        );
+
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = wallet.publicKey;
+        transaction.sign(wallet);
+
+        const signature = await connection.sendRawTransaction(transaction.serialize());
+        await connection.confirmTransaction(signature, 'confirmed');
+        console.log('[Withdraw] SOL transferred:', amount, 'to', destinationAddress, 'Signature:', signature);
+
+        res.json({ success: true, signature });
+    } catch (error) {
+        console.error('[Withdraw] Error:', error.message);
+        res.status(500).json({ error: 'Failed to withdraw SOL', details: error.message });
+    }
+});
 
 app.get('/solana-web3.js', (req, res) => {
     res.sendFile(path.join(__dirname, 'node_modules', '@solana', 'web3.js', 'dist', 'index.js'));

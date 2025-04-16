@@ -1945,6 +1945,7 @@ async function confirmMint() {
         const signedTx1 = await window.solana.signTransaction(transaction1);
         const signature1 = await connection.sendRawTransaction(signedTx1.serialize());
         console.log('[Mint] Transaction 1 Signature:', signature1);
+        alert(`Transaction 1 Signature: ${signature1}`); // Alert the signature for easy access
 
         await connection.confirmTransaction({
             signature: signature1,
@@ -1964,6 +1965,7 @@ async function confirmMint() {
         const signedTx2 = await window.solana.signTransaction(transaction2);
         const signature2 = await connection.sendRawTransaction(signedTx2.serialize());
         console.log('[Mint] Transaction 2 Signature:', signature2);
+        alert(`Transaction 2 Signature: ${signature2}`); // Alert the signature for easy access
 
         await connection.confirmTransaction({
             signature: signature2,
