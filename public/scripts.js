@@ -904,29 +904,61 @@ async function completePurchase() {
             window.open(paymentResult.chargeUrl, '_blank');
             alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
             document.getElementById('checkout-modal').classList.remove('active');
-        } else if (method === 'stripe') {
-            const stripeResponse = await fetch('/create-stripe-checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    username: loggedInUsername, 
-                    amount: window.totalPrice,
-                    productId: window.currentProductId,
-                    variantId: window.currentVariantId,
-                    address: address,
-                    shippingMethodId,
-                    shippingCost
-                }),
+       } else if (method === 'stripe') {
+    const stripeResponse = await fetch('/create-stripe-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            username: loggedInUsername, 
+            amount: window.totalPrice,
+            productId: window.currentProductId,
+            variantId: window.currentVariantId,
+            address: address,
+            shippingMethodId,
+            shippingCost
+        }),
+        credentials: 'include'
+    });
+    paymentResult = await stripeResponse.json();
+    if (!stripeResponse.ok || !paymentResult.success) {
+        console.error('[StripeCheckout] Failed to create session:', paymentResult.error);
+        throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
+    }
+    const checkoutWindow = window.open(paymentResult.url, '_blank');
+    if (!checkoutWindow) {
+        console.error('[StripeCheckout] Failed to open checkout window (popup blocked?)');
+        alert('Please allow popups and try again.');
+        return;
+    }
+    document.getElementById('checkout-modal').classList.remove('active');
+    // Display non-blocking notification
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; background: #32cd32; color: white;
+        padding: 10px 20px; border-radius: 5px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    `;
+    notification.textContent = 'Complete the payment in the new window. You will be redirected after confirmation.';
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 5000);
+    // Poll payment status
+    const checkStatus = setInterval(async () => {
+        try {
+            const response = await fetch(`/success?session_id=${paymentResult.sessionId}`, {
+                method: 'GET',
                 credentials: 'include'
             });
-            paymentResult = await stripeResponse.json();
-            if (!stripeResponse.ok || !paymentResult.success) {
-                console.error('[StripeCheckout] Failed to create session:', paymentResult.error);
-                throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
+            const result = await response.text();
+            if (response.ok && result.includes('Order placed successfully')) {
+                clearInterval(checkStatus);
+                console.log('[StripeCheckout] Payment successful, redirecting to /success');
+                window.location.href = `/success?session_id=${paymentResult.sessionId}`;
+                checkoutWindow.close();
             }
-            window.open(paymentResult.url, '_blank');
-            alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
-            document.getElementById('checkout-modal').classList.remove('active');
+        } catch (error) {
+            console.error('[StripeCheckout] Status check error:', error.message);
+        }
+    }, 2000);
+}
         } else if (method === 'paypal') {
             const paypalResponse = await fetch('/create-paypal-order', {
                 method: 'POST',
@@ -1041,12 +1073,15 @@ async function checkPaymentStatus() {
                 credentials: 'include'
             });
             const result = await response.text();
-	    console.log('[CheckPaymentStatus] Response:', result);
+            console.log('[CheckPaymentStatus] Response:', result);
             if (response.ok && result.includes('Order placed successfully')) {
-                alert('Your order was placed successfully! Check your email for confirmation.');
+                if (!sessionStorage.getItem('paymentConfirmed')) {
+                    alert('Your order was placed successfully! Check your email for confirmation.');
+                    sessionStorage.setItem('paymentConfirmed', 'true');
+                }
             } else {
                 console.error('[CheckPaymentStatus] Payment verification failed:', result);
-                alert('Error verifying payment. Please check your order status.');
+                alert('Error verifying payment. Please check your order status in your profile.');
             }
         } catch (error) {
             console.error('[CheckPaymentStatus] Error:', error.message);
@@ -1055,7 +1090,6 @@ async function checkPaymentStatus() {
     }
 }
 
-// Call on page load
 document.addEventListener('DOMContentLoaded', () => {
     checkPaymentStatus();
     // ... existing DOMContentLoaded code

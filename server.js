@@ -2042,31 +2042,48 @@ app.get('/stripe-success', async (req, res) => {
         headers: req.headers,
         session: req.session
     });
-    console.log('[StripeSuccess] Handling success redirect, session_id:', req.query.session_id);
     try {
         const sessionId = req.query.session_id;
         if (!sessionId) {
             console.error('[StripeSuccess] Missing session_id');
-            return res.redirect('/cancel');
+            return res.redirect(`/cancel?error=${encodeURIComponent('Missing session_id')}`);
         }
 
         const session = await stripe.checkout.sessions.retrieve(sessionId);
         console.log('[StripeSuccess] Session data:', JSON.stringify(session, null, 2));
         if (session.payment_status !== 'paid') {
             console.error('[StripeSuccess] Payment not completed, status:', session.payment_status);
-            return res.redirect('/cancel');
+            return res.redirect(`/cancel?error=${encodeURIComponent('Payment not completed')}`);
         }
 
         const { username, productId, variantId, address, shippingMethodId, shippingCost } = session.metadata || req.session.pendingOrder || {};
         if (!username || !productId || !variantId || !address || !shippingMethodId || !shippingCost) {
             console.error('[StripeSuccess] Missing order data, metadata:', session.metadata, 'session:', req.session.pendingOrder);
-            return res.redirect('/cancel');
+            return res.redirect(`/cancel?error=${encodeURIComponent('Missing order data')}`);
+        }
+
+        const existingOrder = await db.collection('users').findOne({
+            username: { $regex: `^${username}$`, $options: 'i' },
+            'orders.sessionId': sessionId
+        });
+        if (existingOrder) {
+            console.log('[StripeSuccess] Order already processed for session:', sessionId);
+            return res.send(`
+                <script>
+                    if (window.opener) {
+                        window.opener.location.href = '/success?session_id=${sessionId}';
+                        window.close();
+                    } else {
+                        window.location.href = '/success?session_id=${sessionId}';
+                    }
+                </script>
+            `);
         }
 
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user || !user.email) {
             console.error('[StripeSuccess] User or email not found:', username);
-            return res.redirect('/cancel');
+            return res.redirect(`/cancel?error=${encodeURIComponent('User or email not found')}`);
         }
 
         const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
@@ -2146,7 +2163,8 @@ app.get('/stripe-success', async (req, res) => {
             price: variant.price / 100,
             shippingCost: parseFloat(shippingCost),
             timestamp: Date.now(),
-            status: 'Pending'
+            status: 'Pending',
+            sessionId
         };
         if (!user.orders) user.orders = [];
         user.orders.push(order);
@@ -2167,10 +2185,19 @@ app.get('/stripe-success', async (req, res) => {
 
         delete req.session.pendingOrder;
         console.log('[StripeSuccess] Redirecting to /success with session_id:', sessionId);
-        res.redirect(`/success?session_id=${sessionId}`); // Pass session_id
+        res.send(`
+            <script>
+                if (window.opener) {
+                    window.opener.location.href = '/success?session_id=${sessionId}';
+                    window.close();
+                } else {
+                    window.location.href = '/success?session_id=${sessionId}';
+                }
+            </script>
+        `);
     } catch (error) {
         console.error('[StripeSuccess] Error:', error.message, error.stack);
-        res.redirect('/cancel');
+        res.redirect(`/cancel?error=${encodeURIComponent(error.message)}`);
     }
 });
 
@@ -3267,6 +3294,11 @@ app.post('/checkout', async (req, res) => {
 
 
 app.get('/success', async (req, res) => {
+    console.log('[Success] Request received:', {
+        query: req.query,
+        headers: req.headers,
+        session: req.session
+    });
     try {
         const sessionId = req.query.session_id;
         if (!sessionId) {
@@ -3274,9 +3306,8 @@ app.get('/success', async (req, res) => {
             return res.send('Payment not completed. <a href="/">Return to site</a>');
         }
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        console.log('[Success] Session data:', session);
+        console.log('[Success] Session data:', JSON.stringify(session, null, 2));
         if (session.payment_status === 'paid') {
-            // Handle both subscription and one-time payments
             if (session.mode === 'subscription') {
                 const username = session.metadata.username;
                 users[username].isPremium = true;
@@ -3287,6 +3318,7 @@ app.get('/success', async (req, res) => {
                 res.send('Order placed successfully! Check your email for confirmation. <a href="/">Return to site</a>');
             }
         } else {
+            console.error('[Success] Payment not completed, status:', session.payment_status);
             res.send('Payment not completed. <a href="/">Return to site</a>');
         }
     } catch (error) {
@@ -3294,7 +3326,6 @@ app.get('/success', async (req, res) => {
         res.send('Error verifying payment: ' + error.message);
     }
 });
-
 
 app.get('/cancel', (req, res) => {
     const error = req.query.error || 'Payment was cancelled or failed.';
