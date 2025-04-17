@@ -1203,6 +1203,11 @@ footer {
             <label>State: <input type="text" id="checkout-state" required></label><br>
             <label>ZIP Code: <input type="text" id="checkout-zip" required></label><br>
             <label>Country: <input type="text" id="checkout-country" required></label><br>
+	    <label>Shipping Method: 
+                <select id="shipping-method" onchange="updateCheckoutTotal()">
+                    <option value="">Select Shipping</option>
+                </select>
+            </label><br>
             <label>Payment Method:
                 <select id="payment-method" onchange="updatePaymentFields()">
                     <option value="coinbase">Crypto (Coinbase)</option>
@@ -1212,7 +1217,7 @@ footer {
                 </select>
             </label><br>
             <div id="payment-fields"></div>
-            <p id="checkout-total"></p>
+            <p>Total: <span id="checkout-total">$0.00</span></p>
             <button type="button" onclick="completePurchase()" style="padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Complete Purchase</button>
         </form>
     </div>

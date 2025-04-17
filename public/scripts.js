@@ -286,6 +286,137 @@ async function fetchSolPrice() {
     }
 }
 
+async function fetchShippingMethods(productId, variantId, address) {
+    try {
+        console.log('[ShippingMethods] Fetching with productId:', productId, 'variantId:', variantId, 'address:', address);
+        const response = await fetch('/printify-shipping-methods', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId, variantId, address }),
+            credentials: 'include'
+        });
+        const result = await response.json();
+        console.log('[ShippingMethods] Fetched:', JSON.stringify(result, null, 2));
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Failed to fetch shipping methods');
+        }
+        if (!result.shippingMethods || result.shippingMethods.length === 0) {
+            console.warn('[ShippingMethods] No shipping methods returned');
+        }
+        return result.shippingMethods;
+    } catch (error) {
+        console.error('[ShippingMethods] Error:', error.message);
+        return [];
+    }
+}
+
+async function populateShippingDropdown() {
+    const shippingSelect = document.getElementById('shipping-method');
+    if (!shippingSelect) {
+        console.error('[PopulateShippingDropdown] Shipping method select not found');
+        return;
+    }
+    shippingSelect.innerHTML = '<option value="">Select Shipping</option>';
+
+    const productId = window.currentProductId;
+    const variantId = window.currentVariantId;
+    const addressFields = {
+        firstName: document.getElementById('checkout-first-name').value.trim(),
+        lastName: document.getElementById('checkout-last-name').value.trim(),
+        street: document.getElementById('checkout-street').value.trim(),
+        city: document.getElementById('checkout-city').value.trim(),
+        state: document.getElementById('checkout-state').value.trim(),
+        zip: document.getElementById('checkout-zip').value.trim(),
+        country: document.getElementById('checkout-country').value.trim()
+    };
+
+    const address = `${addressFields.firstName} ${addressFields.lastName}, ${addressFields.street}, ${addressFields.city}, ${addressFields.state}, ${addressFields.zip}, ${addressFields.country}`;
+
+    if (!productId || !variantId || !addressFields.country || !addressFields.zip) {
+        console.warn('[PopulateShippingDropdown] Missing productId, variantId, or required address fields:', { productId, variantId, address });
+        return;
+    }
+
+    const methods = await fetchShippingMethods(productId, variantId, address);
+    console.log('[PopulateShippingDropdown] Populating with methods:', methods);
+    window.shippingMethods = methods;
+    methods.forEach(method => {
+        const option = document.createElement('option');
+        option.value = method.id;
+        option.textContent = `${method.name} - $${(method.cost / 100).toFixed(2)}`;
+        option.dataset.cost = method.cost; // In cents
+        shippingSelect.appendChild(option);
+    });
+    updateCheckoutTotal();
+}
+
+function startCheckout() {
+    closeProductModal();
+    const modal = document.getElementById('checkout-modal');
+    if (!modal) {
+        console.error('[CheckoutModal] Modal element not found');
+        return;
+    }
+
+    const product = window.printifyProducts.find(p => p.id === window.currentProductId);
+    if (!product) {
+        console.error('[StartCheckout] Product not found:', window.currentProductId);
+        return;
+    }
+
+    const selectedOptions = product.options.map(opt => {
+        const select = document.getElementById(`option-${opt.name.replace(/\s+/g, '-')}`);
+        return parseInt(select.value);
+    });
+
+    console.log('[StartCheckout] Selected options:', selectedOptions);
+
+    let variant = product.variants.find(v => 
+        v.options.every((optId, i) => optId === selectedOptions[i])
+    );
+
+    if (!variant) {
+        console.warn('[StartCheckout] No matching variant found for options:', selectedOptions);
+        variant = product.variants[0];
+        console.log('[StartCheckout] Falling back to first variant:', variant);
+    }
+
+    window.currentVariantId = variant.id;
+    window.currentPrice = variant.price / 100;
+    document.getElementById('checkout-total').textContent = `$${window.currentPrice.toFixed(2)}`;
+    updatePaymentFields();
+    modal.classList.add('active');
+
+    // Add event listeners to address fields to update shipping rates
+    const addressFields = ['first-name', 'last-name', 'street', 'city', 'state', 'zip', 'country'];
+    addressFields.forEach(field => {
+        const input = document.getElementById(`checkout-${field}`);
+        if (input) {
+            input.addEventListener('change', () => {
+                console.log('[AddressChange] Address field changed:', field);
+                populateShippingDropdown();
+            });
+        }
+    });
+
+    // Initial population (will skip if address incomplete)
+    populateShippingDropdown();
+}
+
+function updateCheckoutTotal() {
+    const shippingSelect = document.getElementById('shipping-method');
+    const totalSpan = document.getElementById('checkout-total');
+    if (!shippingSelect || !totalSpan) {
+        console.error('[UpdateCheckoutTotal] Elements not found');
+        return;
+    }
+    const selectedOption = shippingSelect.options[shippingSelect.selectedIndex];
+    const shippingCost = selectedOption && selectedOption.dataset.cost ? parseInt(selectedOption.dataset.cost) : 0;
+    const productPrice = window.currentPrice ? window.currentPrice * 100 : 0; // Convert to cents
+    const totalCost = (productPrice + shippingCost) / 100; // Convert back to dollars
+    totalSpan.textContent = `$${totalCost.toFixed(2)}`;
+    window.totalPrice = totalCost; // Store total for payment
+}
 
 // Update login function to handle form submission
 async function login(event) {
@@ -538,7 +669,6 @@ function showProductModal(productId) {
     modal.classList.add('active');
 }
 
-// Replace the existing updatePrice function and rename to updatePriceAndImages
 function updatePriceAndImages(productId) {
     const product = window.printifyProducts.find(p => p.id === productId);
     if (!product) {
@@ -564,6 +694,8 @@ function updatePriceAndImages(productId) {
     }
 
     document.getElementById('product-modal-price').textContent = `$${variant.price / 100}`;
+    window.currentPrice = variant.price / 100; // Store product price
+    window.currentVariantId = variant.id; // Store variant ID
     updateGalleryImages(productId, variant.id);
 }
 
@@ -624,43 +756,7 @@ function closeCheckoutModal() {
     if (modal) modal.classList.remove('active');
 }
 
-
-
-
-function updatePrice(productId) {
-    const product = window.printifyProducts.find(p => p.id === productId);
-    if (!product) {
-        console.error('[UpdatePrice] Product not found:', productId);
-        return;
-    }
-
-
-    const selectedOptions = product.options.map(opt => {
-        const select = document.getElementById(`option-${opt.name.replace(/\s+/g, '-')}`);
-        return parseInt(select.value);
-    });
-
-
-    console.log('[UpdatePrice] Selected options:', selectedOptions);
-
-
-    const variant = product.variants.find(v => {
-        console.log('[UpdatePrice] Checking variant options:', v.options);
-        return v.options.every((optId, i) => optId === selectedOptions[i]);
-    });
-
-
-    if (!variant) {
-        console.error('[UpdatePrice] No matching variant found for options:', selectedOptions);
-        return;
-    }
-
-
-    document.getElementById('product-modal-price').textContent = `$${variant.price / 100}`;
-}
-
-
-function startCheckout() {
+async function startCheckout() {
     closeProductModal();
     const modal = document.getElementById('checkout-modal');
     if (!modal) {
@@ -668,42 +764,67 @@ function startCheckout() {
         return;
     }
 
-
     const product = window.printifyProducts.find(p => p.id === window.currentProductId);
     if (!product) {
         console.error('[StartCheckout] Product not found:', window.currentProductId);
         return;
     }
 
-
     const selectedOptions = product.options.map(opt => {
         const select = document.getElementById(`option-${opt.name.replace(/\s+/g, '-')}`);
         return parseInt(select.value);
     });
 
-
     console.log('[StartCheckout] Selected options:', selectedOptions);
-
 
     let variant = product.variants.find(v => 
         v.options.every((optId, i) => optId === selectedOptions[i])
     );
 
-
     if (!variant) {
         console.warn('[StartCheckout] No matching variant found for options:', selectedOptions);
-        variant = product.variants[0]; // Fallback to the first variant
+        variant = product.variants[0];
         console.log('[StartCheckout] Falling back to first variant:', variant);
     }
 
-
-    document.getElementById('checkout-total').textContent = `Total: $${variant.price / 100}`;
     window.currentVariantId = variant.id;
     window.currentPrice = variant.price / 100;
+    document.getElementById('checkout-total').textContent = `$${window.currentPrice.toFixed(2)}`;
+
+    // Pre-fill address fields with user data if available
+    const userProfileResponse = await fetch(`/profile/${loggedInUsername}`, {
+        method: 'GET',
+        credentials: 'include'
+    });
+    const userProfile = await userProfileResponse.json();
+    if (userProfile.success && userProfile.address) {
+        const [firstName, lastName, street, city, state, zip, country] = userProfile.address.split(', ').map(s => s.trim());
+        document.getElementById('checkout-first-name').value = firstName || '';
+        document.getElementById('checkout-last-name').value = lastName || '';
+        document.getElementById('checkout-street').value = street || '';
+        document.getElementById('checkout-city').value = city || '';
+        document.getElementById('checkout-state').value = state || '';
+        document.getElementById('checkout-zip').value = zip || '';
+        document.getElementById('checkout-country').value = country || '';
+        document.getElementById('checkout-email').value = userProfile.email || '';
+    }
+
     updatePaymentFields();
     modal.classList.add('active');
-}
 
+    const addressFields = ['first-name', 'last-name', 'street', 'city', 'state', 'zip', 'country'];
+    addressFields.forEach(field => {
+        const input = document.getElementById(`checkout-${field}`);
+        if (input) {
+            input.addEventListener('change', () => {
+                console.log('[AddressChange] Address field changed:', field);
+                populateShippingDropdown();
+            });
+        }
+    });
+
+    populateShippingDropdown();
+}
 
 function updatePaymentFields() {
     const method = document.getElementById('payment-method').value;
@@ -717,23 +838,6 @@ function updatePaymentFields() {
         fieldsDiv.innerHTML = `<p>Pay with SOL using your connected wallet.</p>`;
     } else {
         fieldsDiv.innerHTML = `<p>Proceed to Coinbase checkout after clicking "Complete Purchase".</p>`;
-    }
-}
-
-
-// Add after checkSession (around line 300)
-async function fetchSolPrice() {
-    try {
-        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {
-            method: 'GET'
-        });
-        const data = await response.json();
-        solPrice = data.solana.usd;
-        console.log('[SolPrice] Fetched SOL price:', solPrice, 'USD');
-        return solPrice;
-    } catch (error) {
-        console.error('[SolPrice] Error fetching SOL price:', error.message);
-        return null;
     }
 }
 
@@ -760,6 +864,16 @@ async function completePurchase() {
     }
 
     const method = document.getElementById('payment-method').value;
+    const shippingSelect = document.getElementById('shipping-method');
+    const shippingMethodId = shippingSelect.value;
+    if (!shippingMethodId) {
+        alert('Please select a shipping method!');
+        return;
+    }
+
+    const selectedOption = shippingSelect.options[shippingSelect.selectedIndex];
+    const shippingCost = selectedOption && selectedOption.dataset.cost ? parseInt(selectedOption.dataset.cost) / 100 : 0; // Convert to dollars
+
     const address = `${shipping.firstName} ${shipping.lastName}, ${shipping.street}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
 
     try {
@@ -774,10 +888,12 @@ async function completePurchase() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     username: loggedInUsername, 
-                    amount: window.currentPrice,
+                    amount: window.totalPrice,
                     productId: window.currentProductId,
                     variantId: window.currentVariantId,
-                    address: address
+                    address: address,
+                    shippingMethodId,
+                    shippingCost // Pass shipping cost
                 }),
                 credentials: 'include'
             });
@@ -794,10 +910,12 @@ async function completePurchase() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     username: loggedInUsername, 
-                    amount: window.currentPrice,
+                    amount: window.totalPrice,
                     productId: window.currentProductId,
                     variantId: window.currentVariantId,
-                    address: address
+                    address: address,
+                    shippingMethodId,
+                    shippingCost // Pass shipping cost
                 }),
                 credentials: 'include'
             });
@@ -805,7 +923,7 @@ async function completePurchase() {
             if (!stripeResponse.ok || !paymentResult.success) {
                 throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
             }
-            window.open(paymentResult.url, '_blank'); // Open Stripe in new window
+            window.open(paymentResult.url, '_blank');
             document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'paypal') {
             const paypalResponse = await fetch('/create-paypal-order', {
@@ -813,10 +931,12 @@ async function completePurchase() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     username: loggedInUsername, 
-                    amount: window.currentPrice,
+                    amount: window.totalPrice,
                     productId: window.currentProductId,
                     variantId: window.currentVariantId,
-                    address: address
+                    address: address,
+                    shippingMethodId,
+                    shippingCost // Pass shipping cost
                 }),
                 credentials: 'include'
             });
@@ -836,8 +956,7 @@ async function completePurchase() {
                 alert('Solana Web3 library not loaded. Please refresh and try again.');
                 return;
             }
-	    console.log('[CompletePurchase] User wallet address:', walletAddress);
-            // Validate walletAddress format
+            console.log('[CompletePurchase] User wallet address:', walletAddress);
             if (!walletAddress.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
                 console.error('[CompletePurchase] Invalid wallet address format:', walletAddress);
                 throw new Error('Invalid wallet address format');
@@ -848,9 +967,9 @@ async function completePurchase() {
                     throw new Error('Failed to fetch SOL price');
                 }
             }
-            const amountSol = window.currentPrice / solPrice;
-            console.log('[CompletePurchase] SOL amount:', amountSol, 'for $', window.currentPrice);
-            alert(`You will pay ${amountSol.toFixed(4)} SOL for $${window.currentPrice.toFixed(2)}`);
+            const amountSol = window.totalPrice / solPrice;
+            console.log('[CompletePurchase] SOL amount:', amountSol, 'for $', window.totalPrice);
+            alert(`You will pay ${amountSol.toFixed(4)} SOL for $${window.totalPrice.toFixed(2)}`);
 
             const solResponse = await fetch('/create-sol-transaction', {
                 method: 'POST',
@@ -860,7 +979,9 @@ async function completePurchase() {
                     amountSol: amountSol,
                     productId: window.currentProductId,
                     variantId: window.currentVariantId,
-                    address: address
+                    address: address,
+                    shippingMethodId,
+                    shippingCost // Pass shipping cost
                 }),
                 credentials: 'include'
             });
@@ -881,7 +1002,9 @@ async function completePurchase() {
                     username: loggedInUsername, 
                     productId: window.currentProductId, 
                     variantId: window.currentVariantId,
-                    address: address
+                    address: address,
+                    shippingMethodId,
+                    shippingCost // Pass shipping cost
                 }),
                 credentials: 'include'
             });

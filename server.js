@@ -1599,28 +1599,83 @@ app.get('/printify-products', async (req, res) => {
     }
 });
 
-app.get('/printify-shipping-methods', async (req, res) => {
+app.post('/printify-shipping-methods', async (req, res) => {
     try {
+        const { productId, variantId, address } = req.body;
+        if (!productId || !variantId || !address) {
+            console.error('[PrintifyShipping] Missing required fields');
+            return res.status(400).json({ success: false, error: 'Missing productId, variantId, or address' });
+        }
+
         const printifyApiToken = process.env.PRINTIFY_API_KEY;
         const shopId = process.env.PRINTIFY_SHOP_ID;
-        console.log('[PrintifyShipping] Fetching shipping methods for shop:', shopId);
+        console.log('[PrintifyShipping] Fetching shipping methods for shop:', shopId, 'product:', productId);
 
-        const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/shipping_rates.json`, {
-            method: 'GET',
+        const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+        const countryCode = countryToIsoCode[country];
+        if (!countryCode) {
+            console.error('[PrintifyShipping] Unsupported country:', country);
+            return res.status(400).json({ success: false, error: `Unsupported country: ${country}` });
+        }
+
+        const payload = {
+            line_items: [{
+                product_id: productId,
+                variant_id: parseInt(variantId),
+                quantity: 1
+            }],
+            address_to: {
+                country: countryCode,
+                region: state,
+                city: city,
+                zip: zip,
+                address1: street
+            }
+        };
+
+        const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders/shipping.json`, {
+            method: 'POST',
             headers: {
                 Authorization: `Bearer ${printifyApiToken}`,
                 'Content-Type': 'application/json'
-            }
+            },
+            body: JSON.stringify(payload)
         });
         const data = await response.json();
         console.log('[PrintifyShipping] Response status:', response.status);
         console.log('[PrintifyShipping] Response data:', JSON.stringify(data, null, 2));
 
         if (!response.ok) {
+            console.error('[PrintifyShipping] Error fetching shipping methods:', data);
             return res.status(response.status).json({ success: false, error: 'Failed to fetch shipping methods', details: data });
         }
 
-        res.json({ success: true, shippingMethods: data || [] });
+        // Transform response into { id, name, cost } format
+        const shippingMethods = [];
+        if (data.standard) {
+            shippingMethods.push({
+                id: 1, // Static ID for Standard
+                name: 'Standard',
+                cost: data.standard // In cents
+            });
+        }
+        if (data.express) {
+            shippingMethods.push({
+                id: 2, // Static ID for Express
+                name: 'Express',
+                cost: data.express
+            });
+        }
+        if (data.priority) {
+            shippingMethods.push({
+                id: 3, // Static ID for Priority
+                name: 'Priority',
+                cost: data.priority
+            });
+        }
+
+        console.log('[PrintifyShipping] Transformed shipping methods:', shippingMethods);
+        res.json({ success: true, shippingMethods });
     } catch (error) {
         console.error('[PrintifyShipping] Error:', error.message);
         res.status(500).json({ success: false, error: 'Failed to fetch shipping methods', details: error.message });
@@ -1686,9 +1741,10 @@ const countryToIsoCode = {
 };
 
 app.post('/printify-order', async (req, res) => {
+    console.log('[PrintifyOrder] Received request:', req.body);
     try {
-        const { username, productId, variantId, address } = req.body;
-        if (!username || !productId || !variantId || !address) {
+        const { username, productId, variantId, address, shippingMethodId, shippingCost } = req.body;
+        if (!username || !productId || !variantId || !address || !shippingMethodId || shippingCost === undefined) {
             console.error('[PrintifyOrder] Missing required fields');
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
@@ -1703,7 +1759,6 @@ app.post('/printify-order', async (req, res) => {
         const [firstName, ...lastNameParts] = fullName.split(' ');
         const lastName = lastNameParts.join(' ');
 
-        // Convert country name to ISO code
         const countryCode = countryToIsoCode[country];
         if (!countryCode) {
             console.error('[PrintifyOrder] Unsupported country:', country);
@@ -1713,7 +1768,6 @@ app.post('/printify-order', async (req, res) => {
         const printifyApiToken = process.env.PRINTIFY_API_KEY;
         const shopId = process.env.PRINTIFY_SHOP_ID;
 
-        // Fetch product details from Printify
         const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
             method: 'GET',
             headers: {
@@ -1739,7 +1793,7 @@ app.post('/printify-order', async (req, res) => {
                 variant_id: parseInt(variantId),
                 quantity: 1
             }],
-            shipping_method: 1,
+            shipping_method: parseInt(shippingMethodId),
             send_shipping_notification: true,
             address_to: {
                 first_name: firstName,
@@ -1771,12 +1825,12 @@ app.post('/printify-order', async (req, res) => {
             throw new Error(orderResult.errors?.reason || 'Failed to create order');
         }
 
-        // Store order with product details
         const order = {
             orderId: orderResult.id,
             productTitle: productData.title,
             image: productData.images[0]?.src || 'https://via.placeholder.com/100',
-            price: variant.price / 100, // Convert cents to dollars
+            price: variant.price / 100,
+            shippingCost: shippingCost, // Use passed shipping cost
             timestamp: Date.now(),
             status: 'Pending'
         };
@@ -1789,18 +1843,45 @@ app.post('/printify-order', async (req, res) => {
         users[username.toLowerCase()] = user;
         await saveData(users, 'users');
 
-        // Send order confirmation email
-        await sendOrderConfirmationEmail(user.email, username, {
-            orderId: orderResult.id,
-            productTitle: productData.title,
-            price: variant.price / 100,
-            shippingAddress: address
-        });
+        try {
+            await sendOrderConfirmationEmail(user.email, username, {
+                orderId: orderResult.id,
+                productTitle: productData.title,
+                price: variant.price / 100,
+                shippingCost: shippingCost, // Use passed shipping cost
+                shippingAddress: address
+            });
+        } catch (emailError) {
+            console.error('[PrintifyOrder] Email sending failed, proceeding with order:', emailError.message);
+        }
 
         res.json({ success: true, orderId: orderResult.id });
     } catch (error) {
         console.error('[PrintifyOrder] Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/cleanup-pending-order', async (req, res) => {
+    console.log('[CleanupPendingOrder] Received request:', req.body);
+    try {
+        const { transactionId } = req.body;
+        if (!transactionId) {
+            console.error('[CleanupPendingOrder] Missing transactionId');
+            return res.status(400).json({ success: false, error: 'Missing transactionId' });
+        }
+
+        const result = await db.collection('pending_orders').deleteOne({ transactionId });
+        console.log('[CleanupPendingOrder] Delete result:', result);
+
+        if (result.deletedCount === 0) {
+            console.warn('[CleanupPendingOrder] No pending order found for transactionId:', transactionId);
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[CleanupPendingOrder] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to cleanup pending order', details: error.message });
     }
 });
 
@@ -3740,7 +3821,7 @@ app.post('/create-sol-transaction', async (req, res) => {
 
 
 async function sendOrderConfirmationEmail(to, username, orderDetails) {
-    console.log('[OrderEmail] Sending confirmation to:', to);
+    console.log('[OrderEmail] Sending confirmation to:', to, 'with details:', orderDetails);
     try {
         if (!transporter) {
             console.error('[OrderEmail] Transporter not initialized');
@@ -3765,7 +3846,9 @@ async function sendOrderConfirmationEmail(to, username, orderDetails) {
                                     <h2>Order Details</h2>
                                     <p><strong>Order ID:</strong> ${orderDetails.orderId}</p>
                                     <p><strong>Product:</strong> ${orderDetails.productTitle}</p>
-                                    <p><strong>Price:</strong> $${orderDetails.price.toFixed(2)}</p>
+                                    <p><strong>Product Price:</strong> $${orderDetails.price.toFixed(2)}</p>
+                                    <p><strong>Shipping Cost:</strong> $${orderDetails.shippingCost.toFixed(2)}</p>
+                                    <p><strong>Total:</strong> $${(orderDetails.price + orderDetails.shippingCost).toFixed(2)}</p>
                                     <p><strong>Shipping Address:</strong> ${orderDetails.shippingAddress}</p>
                                     <p>Track your order or reach out at <a href="https://www.lemonclubcollective.com/support" style="color: #ff4500;">support</a>.</p>
                                     <p style="color: #ff4500;">Keep growing those lemons! 🍋</p>
@@ -3783,7 +3866,9 @@ Your order is confirmed and ready to make your day zestier!
 Order Details:
 Order ID: ${orderDetails.orderId}
 Product: ${orderDetails.productTitle}
-Price: $${orderDetails.price.toFixed(2)}
+Product Price: $${orderDetails.price.toFixed(2)}
+Shipping Cost: $${orderDetails.shippingCost.toFixed(2)}
+Total: $${(orderDetails.price + orderDetails.shippingCost).toFixed(2)}
 Shipping Address: ${orderDetails.shippingAddress}
 
 Track your order or reach out at https://www.lemonclubcollective.com/support.
