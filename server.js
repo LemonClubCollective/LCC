@@ -3676,18 +3676,21 @@ app.post('/create-sol-transaction', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-        const merchantWalletKey = process.env.MERCHANT_WALLET_PUBLIC_KEY;
-        if (!merchantWalletKey) {
-            console.error('[SolTransaction] MERCHANT_WALLET_PUBLIC_KEY not set');
-            return res.status(500).json({ success: false, error: 'Server configuration error: Missing merchant wallet' });
+        const privateKey = process.env.WALLET_PRIVATE_KEY;
+        if (!privateKey) {
+            console.error('[SolTransaction] WALLET_PRIVATE_KEY not set');
+            return res.status(500).json({ success: false, error: 'Server configuration error: Missing wallet key' });
         }
 
-        let merchantWallet;
+        let serverWallet;
         try {
-            merchantWallet = new solanaWeb3.PublicKey(merchantWalletKey);
+            // Derive public key from private key
+            const keypair = solanaWeb3.Keypair.fromSecretKey(bs58.decode(privateKey));
+            serverWallet = keypair.publicKey;
+            console.log('[SolTransaction] Server wallet public key:', serverWallet.toBase58());
         } catch (error) {
-            console.error('[SolTransaction] Invalid MERCHANT_WALLET_PUBLIC_KEY:', error.message);
-            return res.status(500).json({ success: false, error: 'Invalid merchant wallet configuration' });
+            console.error('[SolTransaction] Invalid WALLET_PRIVATE_KEY:', error.message);
+            return res.status(500).json({ success: false, error: 'Invalid wallet configuration' });
         }
 
         const userPublicKey = new solanaWeb3.PublicKey(userWallet);
@@ -3699,7 +3702,7 @@ app.post('/create-sol-transaction', async (req, res) => {
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
                 fromPubkey: userPublicKey,
-                toPubkey: merchantWallet,
+                toPubkey: serverWallet,
                 lamports
             })
         );

@@ -737,7 +737,6 @@ async function fetchSolPrice() {
     }
 }
 
-// Update completePurchase (around line 851)
 async function completePurchase() {
     if (!loggedInUsername) {
         alert('Please login to buy merch!');
@@ -806,7 +805,9 @@ async function completePurchase() {
             if (!stripeResponse.ok || !paymentResult.success) {
                 throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
             }
-            window.location.href = paymentResult.url;
+            window.open(paymentResult.url, '_blank'); // Open Stripe in new window
+            alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
+            document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'paypal') {
             const paypalResponse = await fetch('/create-paypal-order', {
                 method: 'POST',
