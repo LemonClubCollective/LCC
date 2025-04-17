@@ -915,6 +915,11 @@ footer {
     text-align: center;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     width: clamp(8rem, 40vw, 12rem);
+    transition: transform 0.2s; /* Add smooth transition for scaling */
+}
+
+.product-card:hover {
+    transform: scale(1.05); /* Match NFT card pop effect */
 }
 
 .product-card img {
@@ -1513,12 +1518,14 @@ footer {
                         <label style="display: block;"><input type="checkbox" id="regEmailConsent"> I consent to email updates</label>
                         <button id="join-btn" onclick="register()" data-tooltip="Join the Club">Sign Up</button>
                     </div>
-                    <div class="auth-row">
-                        <input type="text" id="loginUsername" placeholder="Username" style="display: inline-block; width: 45%;">
-                        <input type="password" id="loginPassword" placeholder="Password" style="display: inline-block; width: 45%;">
-                        <button onclick="login()" data-tooltip="Login to Account" style="display: inline-block; vertical-align: middle;">Login</button>
-                    </div>
-                    <button onclick="logout()" data-tooltip="Logout of Account">Logout</button>
+                  <div class="auth-row">
+    <form onsubmit="login(event)">
+        <input type="text" id="loginUsername" placeholder="Username" style="display: inline-block; width: 45%;">
+        <input type="password" id="loginPassword" placeholder="Password" style="display: inline-block; width: 45%;">
+        <button type="submit" data-tooltip="Login to Account" style="display: inline-block; vertical-align: middle;">Login</button>
+    </form>
+</div>
+<button onclick="logout()" data-tooltip="Logout of Account">Logout</button>
                 </div>
             </div>
             <div id="staking" class="content">

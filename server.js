@@ -1689,11 +1689,15 @@ app.post('/printify-order', async (req, res) => {
     try {
         const { username, productId, variantId, address } = req.body;
         if (!username || !productId || !variantId || !address) {
+            console.error('[PrintifyOrder] Missing required fields');
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        if (!user || !user.email) {
+            console.error('[PrintifyOrder] User or email not found:', username);
+            return res.status(404).json({ success: false, error: 'User or email not found' });
+        }
 
         const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
         const [firstName, ...lastNameParts] = fullName.split(' ');
@@ -1702,6 +1706,7 @@ app.post('/printify-order', async (req, res) => {
         // Convert country name to ISO code
         const countryCode = countryToIsoCode[country];
         if (!countryCode) {
+            console.error('[PrintifyOrder] Unsupported country:', country);
             throw new Error(`Unsupported country: ${country}. Please use a supported country.`);
         }
 
@@ -1718,13 +1723,20 @@ app.post('/printify-order', async (req, res) => {
         });
         const productData = await productResponse.json();
         if (!productResponse.ok) {
+            console.error('[PrintifyOrder] Failed to fetch product:', productData.errors?.reason);
             throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+        }
+
+        const variant = productData.variants.find(v => v.id === parseInt(variantId));
+        if (!variant) {
+            console.error('[PrintifyOrder] Variant not found:', variantId);
+            throw new Error('Variant not found');
         }
 
         const orderData = {
             line_items: [{
                 product_id: productId,
-                variant_id: variantId,
+                variant_id: parseInt(variantId),
                 quantity: 1
             }],
             shipping_method: 1,
@@ -1734,7 +1746,7 @@ app.post('/printify-order', async (req, res) => {
                 last_name: lastName || '',
                 email: user.email,
                 phone: 'N/A',
-                country: countryCode, // Use ISO code
+                country: countryCode,
                 region: state,
                 address1: street,
                 address2: '',
@@ -1755,6 +1767,7 @@ app.post('/printify-order', async (req, res) => {
         console.log('[PrintifyOrder] Response:', orderResult);
 
         if (!orderResponse.ok) {
+            console.error('[PrintifyOrder] Failed to create order:', orderResult.errors?.reason);
             throw new Error(orderResult.errors?.reason || 'Failed to create order');
         }
 
@@ -1763,6 +1776,7 @@ app.post('/printify-order', async (req, res) => {
             orderId: orderResult.id,
             productTitle: productData.title,
             image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+            price: variant.price / 100, // Convert cents to dollars
             timestamp: Date.now(),
             status: 'Pending'
         };
@@ -1774,6 +1788,14 @@ app.post('/printify-order', async (req, res) => {
         );
         users[username.toLowerCase()] = user;
         await saveData(users, 'users');
+
+        // Send order confirmation email
+        await sendOrderConfirmationEmail(user.email, username, {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            price: variant.price / 100,
+            shippingAddress: address
+        });
 
         res.json({ success: true, orderId: orderResult.id });
     } catch (error) {
@@ -2104,6 +2126,36 @@ app.post('/upload-video', async (req, res) => {
     }
 });
 
+app.get('/check-session', async (req, res) => {
+    console.log('[CheckSession] Checking session for ID:', req.sessionID);
+    if (!req.session || !req.session.username) {
+        console.log('[CheckSession] No active session');
+        return res.status(401).json({ success: false, error: 'Not logged in' });
+    }
+    try {
+        const user = await db.collection('users').findOne({ username: req.session.username });
+        if (!user) {
+            console.log('[CheckSession] User not found:', req.session.username);
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        console.log('[CheckSession] Session valid for:', req.session.username);
+        res.json({
+            success: true,
+            username: user.username,
+            profilePic: user.profilePic,
+            isAdmin: user.isAdmin || false,
+            lemonadePoints: getLemonadePoints(user.username),
+            stakingPoints: user.stakingPoints || 0,
+            arcadePoints: user.arcadePoints || 0,
+            questPoints: user.questPoints || 0,
+            mintingPoints: user.mintingPoints || 0,
+            bonusPoints: user.bonusPoints || 0
+        });
+    } catch (error) {
+        console.error('[CheckSession] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to check session' });
+    }
+});
 
 app.post('/playtime/:username', async (req, res) => {
     try {
@@ -3482,7 +3534,35 @@ app.post('/create-sol-transaction', async (req, res) => {
     }
 });
 
-
+async function sendOrderConfirmationEmail(to, username, orderDetails) {
+    console.log('[OrderEmail] Sending confirmation to:', to);
+    try {
+        const emailParams = {
+            from: { email: process.env.MAILERSEND_FROM_EMAIL, name: 'Lemon Club Collective' },
+            to: [{ email: to }],
+            subject: `Your Order #${orderDetails.orderId} is Confirmed! 🍋`,
+            html: `
+                <div style="font-family: 'Chelsea Market', cursive; color: #228b22; text-align: center; padding: 20px;">
+                    <h1 style="color: #ff4500;">Thank You, ${username}!</h1>
+                    <p>Your order is confirmed and ready to make your day zestier!</p>
+                    <h2>Order Details</h2>
+                    <p><strong>Order ID:</strong> ${orderDetails.orderId}</p>
+                    <p><strong>Product:</strong> ${orderDetails.productTitle}</p>
+                    <p><strong>Price:</strong> $${orderDetails.price.toFixed(2)}</p>
+                    <p><strong>Shipping Address:</strong> ${orderDetails.shippingAddress}</p>
+                    <p>Track your order or reach out at <a href="https://www.lemonclubcollective.com/support" style="color: #ff4500;">support</a>.</p>
+                    <p style="color: #ff4500;">Keep growing those lemons! 🍋</p>
+                    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lcclogo.png" alt="LCC Logo" style="width: 100px; margin-top: 20px;">
+                </div>
+            `
+        };
+        await mailerSend.email.send(emailParams);
+        console.log('[OrderEmail] Confirmation sent to:', to);
+    } catch (error) {
+        console.error('[OrderEmail] Error:', error.message);
+        throw new Error('Failed to send order confirmation email');
+    }
+}
 
 app.post('/apply-water/:username/:mintAddress', async (req, res) => {
     try {

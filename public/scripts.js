@@ -211,8 +211,69 @@ function updateProfileIcon() {
 
 
 
-async function login() {
-    console.log('[Login] Login button clicked');
+document.addEventListener('DOMContentLoaded', () => {
+    // Existing code...
+    checkSession(); // Add this to check session on load
+
+    // Set up scroll event for header
+    window.addEventListener('scroll', function() {
+        const header = document.querySelector('.header');
+        let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        if (scrollTop > lastScrollTop) header.classList.add('header-hidden');
+        else header.classList.remove('header-hidden');
+        lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+    });
+
+    // Initialize UI elements
+    document.getElementById('splash-page').style.display = 'block';
+    document.getElementById('main-site').style.display = 'none';
+    if (window.solana && window.solana.isConnected) toggleWalletConnection();
+    updateAuthButton();
+    updateProfileIcon();
+    updateQuestsDisplay();
+    updatePointsDisplay();
+
+    // Set up registration button logic
+    const regTos = document.getElementById('regTos');
+    const regRisk = document.getElementById('regRisk');
+    if (regTos) regTos.addEventListener('change', updateRegisterButton);
+    if (regRisk) regRisk.addEventListener('change', updateRegisterButton);
+});
+
+// New function to check session
+async function checkSession() {
+    try {
+        const response = await fetch('/check-session', {
+            method: 'GET',
+            credentials: 'include'
+        });
+        const result = await response.json();
+        console.log('[CheckSession] Response:', result);
+        if (response.ok && result.success) {
+            loggedInUsername = result.username.toLowerCase();
+            loggedInProfilePic = result.profilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
+            isAdmin = result.isAdmin || false;
+            lemonadePoints = bigInt(result.lemonadePoints || "0");
+            stakingPoints = bigInt(result.stakingPoints || "0");
+            arcadePoints = bigInt(result.arcadePoints || "0");
+            questPoints = bigInt(result.questPoints || "0");
+            mintingPoints = bigInt(result.mintingPoints || "0");
+            bonusPoints = bigInt(result.bonusPoints || "0");
+            updateAuthButton();
+            updateProfileIcon();
+            updatePointsDisplay();
+            document.getElementById('login-status').textContent = `Logged in as ${result.username}`;
+            showContent('profile'); // Redirect to profile on session restore
+        }
+    } catch (error) {
+        console.error('[CheckSession] Error:', error.message);
+    }
+}
+
+// Update login function to handle form submission
+async function login(event) {
+    event.preventDefault(); // Prevent default form submission
+    console.log('[Login] Login triggered');
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value.trim();
     console.log('[Login] Username:', username, 'Password:', password);
@@ -227,8 +288,8 @@ async function login() {
             body: JSON.stringify({ username, password }),
             credentials: 'include'
         });
-        const result = await response.json(); // Read once here
-        console.log('[Login] Response:', response.status, result); // Log status and parsed JSON
+        const result = await response.json();
+        console.log('[Login] Response:', response.status, result);
         if (response.ok && result.success) {
             loggedInUsername = username.toLowerCase();
             loggedInProfilePic = result.profilePic || 'https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/PFP1.png';
@@ -240,7 +301,7 @@ async function login() {
             mintingPoints = bigInt(result.mintingPoints || "0");
             bonusPoints = bigInt(result.bonusPoints || "0");
             updateAuthButton();
-            
+            updateProfileIcon();
             updatePointsDisplay();
             document.getElementById('login-status').textContent = `Logged in as ${username}`;
             document.getElementById('loginUsername').value = '';
@@ -258,7 +319,6 @@ async function login() {
         alert('Login failed: ' + error.message);
     }
 }
-
 
 
 
@@ -415,43 +475,113 @@ function showProductModal(productId) {
         return;
     }
 
-
     const modal = document.getElementById('product-modal');
     if (!modal) {
         console.error('[ProductModal] Modal element not found');
         return;
     }
 
-
     document.getElementById('product-modal-title').textContent = product.title;
-    const gallery = document.getElementById('product-gallery-images');
-    let galleryHtml = '';
-    product.images.forEach((img, index) => {
-        galleryHtml += `<img src="${img.src || 'https://via.placeholder.com/300'}" alt="${product.title} - Image ${index + 1}">`;
-    });
-    gallery.innerHTML = galleryHtml;
     document.getElementById('product-modal-description').innerHTML = product.description;
     document.getElementById('product-modal-price').textContent = `$${product.variants[0].price / 100}`;
 
-
-    let optionsHtml = '';
-    const defaultVariant = product.variants[0];
-    product.options.forEach((option, optIndex) => {
-        optionsHtml += `<label>${option.name}: <select id="option-${option.name.replace(/\s+/g, '-')}" onchange="updatePrice('${productId}')">`;
-        const defaultOptionId = defaultVariant.options[optIndex];
-        option.values.forEach(val => {
-            const isValid = product.variants.some(v => v.options[optIndex] === val.id);
-            if (isValid) {
-                optionsHtml += `<option value="${val.id}" ${val.id === defaultOptionId ? 'selected' : ''}>${val.title}</option>`;
-            }
-        });
-        optionsHtml += '</select></label><br>';
+    // Collect valid option IDs from enabled variants only
+    const validOptionIds = product.options.map(() => new Set());
+    product.variants.forEach(variant => {
+        if (variant.is_enabled) { // Only include enabled variants
+            variant.options.forEach((optionId, index) => {
+                validOptionIds[index].add(optionId);
+            });
+        }
     });
-    document.getElementById('product-modal-options').innerHTML = optionsHtml;
+    console.log('[ProductModal] Valid option IDs for enabled variants:', validOptionIds);
 
+    // Populate variant options
+    let optionsHtml = '';
+    const defaultVariant = product.variants.find(v => v.is_enabled) || product.variants[0];
+    product.options.forEach((option, optIndex) => {
+        const validIds = validOptionIds[optIndex];
+        if (validIds.size > 0) {
+            optionsHtml += `<label>${option.name}: <select id="option-${option.name.replace(/\s+/g, '-')}" onchange="updatePriceAndImages('${productId}')">`;
+            const defaultOptionId = defaultVariant.options[optIndex];
+            option.values.forEach(val => {
+                if (validIds.has(val.id)) {
+                    optionsHtml += `<option value="${val.id}" ${val.id === defaultOptionId ? 'selected' : ''}>${val.title}</option>`;
+                }
+            });
+            optionsHtml += '</select></label><br>';
+        }
+    });
+    document.getElementById('product-modal-options').innerHTML = optionsHtml || '<p>No variant options available</p>';
+
+    // Initialize gallery with default variant images
+    updateGalleryImages(productId, defaultVariant.id);
 
     window.currentProductId = productId;
     modal.classList.add('active');
+}
+
+// Replace the existing updatePrice function and rename to updatePriceAndImages
+function updatePriceAndImages(productId) {
+    const product = window.printifyProducts.find(p => p.id === productId);
+    if (!product) {
+        console.error('[UpdatePriceAndImages] Product not found:', productId);
+        return;
+    }
+
+    const selectedOptions = product.options.map(opt => {
+        const select = document.getElementById(`option-${opt.name.replace(/\s+/g, '-')}`);
+        return parseInt(select.value);
+    });
+
+    console.log('[UpdatePriceAndImages] Selected options:', selectedOptions);
+
+    const variant = product.variants.find(v => {
+        console.log('[UpdatePriceAndImages] Checking variant options:', v.options);
+        return v.options.every((optId, i) => optId === selectedOptions[i]);
+    });
+
+    if (!variant) {
+        console.error('[UpdatePriceAndImages] No matching variant found for options:', selectedOptions);
+        return;
+    }
+
+    document.getElementById('product-modal-price').textContent = `$${variant.price / 100}`;
+    updateGalleryImages(productId, variant.id);
+}
+
+// New helper function to update gallery images based on variant
+function updateGalleryImages(productId, variantId) {
+    const product = window.printifyProducts.find(p => p.id === productId);
+    if (!product) {
+        console.error('[UpdateGalleryImages] Product not found:', productId);
+        return;
+    }
+
+    const gallery = document.getElementById('product-gallery-images');
+    if (!gallery) {
+        console.error('[UpdateGalleryImages] Gallery element not found');
+        return;
+    }
+
+    // Filter images for the selected variant
+    let variantImages = product.images.filter(img => 
+        img.variant_ids && img.variant_ids.includes(variantId)
+    );
+
+    // Fallback to all images if no variant-specific images are found
+    if (variantImages.length === 0) {
+        console.warn('[UpdateGalleryImages] No variant-specific images found for variant:', variantId, 'using all product images');
+        variantImages = product.images;
+    }
+
+    let galleryHtml = '';
+    variantImages.forEach((img, index) => {
+        galleryHtml += `<img src="${img.src || 'https://via.placeholder.com/300'}" alt="${product.title} - Image ${index + 1}">`;
+    });
+
+    gallery.innerHTML = galleryHtml || '<p>No images available for this variant</p>';
+    console.log('[UpdateGalleryImages] Updated gallery for variant:', variantId, 'with', variantImages.length, 'images');
 }
 
 
