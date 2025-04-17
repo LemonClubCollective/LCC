@@ -1957,15 +1957,15 @@ app.get('/stripe-success', async (req, res) => {
         }
 
         const session = await stripe.checkout.sessions.retrieve(sessionId);
+        console.log('[StripeSuccess] Session data:', session);
         if (session.payment_status !== 'paid') {
-            console.error('[StripeSuccess] Payment not completed');
+            console.error('[StripeSuccess] Payment not completed, status:', session.payment_status);
             return res.redirect('/cancel');
         }
 
-        // Prefer session.metadata over req.session.pendingOrder
         const { username, productId, variantId, address } = session.metadata || req.session.pendingOrder || {};
         if (!username || !productId || !variantId || !address) {
-            console.error('[StripeSuccess] Missing order data');
+            console.error('[StripeSuccess] Missing order data, metadata:', session.metadata, 'session:', req.session.pendingOrder);
             return res.redirect('/cancel');
         }
 
@@ -1995,6 +1995,7 @@ app.get('/stripe-success', async (req, res) => {
             }
         });
         const productData = await productResponse.json();
+        console.log('[StripeSuccess] Product response:', productData);
         if (!productResponse.ok) {
             console.error('[StripeSuccess] Failed to fetch product:', productData.errors?.reason);
             throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
@@ -2071,7 +2072,7 @@ app.get('/stripe-success', async (req, res) => {
         delete req.session.pendingOrder;
         res.redirect('/success');
     } catch (error) {
-        console.error('[StripeSuccess] Error:', error.message);
+        console.error('[StripeSuccess] Error:', error.message, error.stack);
         res.redirect('/cancel');
     }
 });
@@ -3686,15 +3687,17 @@ app.post('/create-sol-transaction', async (req, res) => {
         let serverWallet;
         try {
             console.log('[SolTransaction] WALLET_PRIVATE_KEY (partial):', privateKey.slice(0, 8) + '...');
+            console.log('[SolTransaction] WALLET_PRIVATE_KEY length:', privateKey.length);
             const decodedKey = bs58.decode(privateKey);
             console.log('[SolTransaction] Decoded key length:', decodedKey.length);
             if (decodedKey.length !== 64) {
-                throw new Error('Invalid private key length; expected 64 bytes');
+                throw new Error(`Invalid private key length; expected 64 bytes, got ${decodedKey.length}`);
             }
             serverWallet = solanaWeb3.Keypair.fromSecretKey(decodedKey).publicKey;
             console.log('[SolTransaction] Server wallet public key:', serverWallet.toBase58());
         } catch (error) {
             console.error('[SolTransaction] Invalid WALLET_PRIVATE_KEY:', error.message, error.stack);
+            console.error('[SolTransaction] Raw WALLET_PRIVATE_KEY (masked):', privateKey.slice(0, 8) + '...' + privateKey.slice(-8));
             return res.status(500).json({ success: false, error: 'Invalid wallet configuration', details: error.message });
         }
 
