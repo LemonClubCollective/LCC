@@ -1962,7 +1962,8 @@ app.get('/stripe-success', async (req, res) => {
             return res.redirect('/cancel');
         }
 
-        const { username, productId, variantId, address } = req.session.pendingOrder || session.metadata || {};
+        // Prefer session.metadata over req.session.pendingOrder
+        const { username, productId, variantId, address } = session.metadata || req.session.pendingOrder || {};
         if (!username || !productId || !variantId || !address) {
             console.error('[StripeSuccess] Missing order data');
             return res.redirect('/cancel');
@@ -3684,13 +3685,15 @@ app.post('/create-sol-transaction', async (req, res) => {
 
         let serverWallet;
         try {
-            // Derive public key from private key
-            const keypair = solanaWeb3.Keypair.fromSecretKey(bs58.decode(privateKey));
-            serverWallet = keypair.publicKey;
+            // Log key for debugging (partially masked)
+            console.log('[SolTransaction] WALLET_PRIVATE_KEY (partial):', privateKey.slice(0, 8) + '...');
+            const decodedKey = bs58.decode(privateKey);
+            console.log('[SolTransaction] Decoded key length:', decodedKey.length);
+            serverWallet = solanaWeb3.Keypair.fromSecretKey(decodedKey).publicKey;
             console.log('[SolTransaction] Server wallet public key:', serverWallet.toBase58());
         } catch (error) {
-            console.error('[SolTransaction] Invalid WALLET_PRIVATE_KEY:', error.message);
-            return res.status(500).json({ success: false, error: 'Invalid wallet configuration' });
+            console.error('[SolTransaction] Invalid WALLET_PRIVATE_KEY:', error.message, error.stack);
+            return res.status(500).json({ success: false, error: 'Invalid wallet configuration', details: error.message });
         }
 
         const userPublicKey = new solanaWeb3.PublicKey(userWallet);
