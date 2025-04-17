@@ -1905,12 +1905,66 @@ app.post('/create-stripe-checkout', async (req, res) => {
     }
 });
 
-app.get('/stripe-success', async (req, res) => {
-    console.log('[StripeSuccess] Handling success redirect');
+app.post('/create-stripe-checkout', async (req, res) => {
+    console.log('[StripeCheckout] Received request:', req.body);
     try {
-        const { username, productId, variantId, address } = req.session.pendingOrder || {};
+        const { username, amount, productId, variantId, address } = req.body;
+        if (!username || !amount || !productId || !variantId || !address) {
+            console.error('[StripeCheckout] Missing required fields');
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) {
+            console.error('[StripeCheckout] User not found:', username);
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+
+        req.session.pendingOrder = { username, productId, variantId, address, amount };
+        console.log('[StripeCheckout] Stored pending order in session:', req.session.pendingOrder);
+
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: [{
+                price_data: {
+                    currency: 'usd',
+                    product_data: { name: 'Merch Purchase' },
+                    unit_amount: Math.round(amount * 100)
+                },
+                quantity: 1
+            }],
+            mode: 'payment',
+            success_url: 'https://www.lemonclubcollective.com/stripe-success?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url: 'https://www.lemonclubcollective.com/cancel',
+            metadata: { username, productId, variantId, address }
+        });
+
+        console.log('[StripeCheckout] Session created:', session.id);
+        res.json({ success: true, url: session.url });
+    } catch (error) {
+        console.error('[StripeCheckout] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to create Stripe checkout' });
+    }
+});
+
+app.get('/stripe-success', async (req, res) => {
+    console.log('[StripeSuccess] Handling success redirect, session_id:', req.query.session_id);
+    try {
+        const sessionId = req.query.session_id;
+        if (!sessionId) {
+            console.error('[StripeSuccess] Missing session_id');
+            return res.redirect('/cancel');
+        }
+
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        if (session.payment_status !== 'paid') {
+            console.error('[StripeSuccess] Payment not completed');
+            return res.redirect('/cancel');
+        }
+
+        const { username, productId, variantId, address } = req.session.pendingOrder || session.metadata || {};
         if (!username || !productId || !variantId || !address) {
-            console.error('[StripeSuccess] Missing pending order data');
+            console.error('[StripeSuccess] Missing order data');
             return res.redirect('/cancel');
         }
 
@@ -2013,14 +2067,13 @@ app.get('/stripe-success', async (req, res) => {
             shippingAddress: address
         });
 
-        delete req.session.pendingOrder; // Clear pending order
+        delete req.session.pendingOrder;
         res.redirect('/success');
     } catch (error) {
         console.error('[StripeSuccess] Error:', error.message);
         res.redirect('/cancel');
     }
 });
-
 
 app.post('/create-paypal-order', async (req, res) => {
     try {
@@ -3623,9 +3676,22 @@ app.post('/create-sol-transaction', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-        const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
-        const merchantWallet = new solanaWeb3.PublicKey(process.env.MERCHANT_WALLET_PUBLIC_KEY);
+        const merchantWalletKey = process.env.MERCHANT_WALLET_PUBLIC_KEY;
+        if (!merchantWalletKey) {
+            console.error('[SolTransaction] MERCHANT_WALLET_PUBLIC_KEY not set');
+            return res.status(500).json({ success: false, error: 'Server configuration error: Missing merchant wallet' });
+        }
+
+        let merchantWallet;
+        try {
+            merchantWallet = new solanaWeb3.PublicKey(merchantWalletKey);
+        } catch (error) {
+            console.error('[SolTransaction] Invalid MERCHANT_WALLET_PUBLIC_KEY:', error.message);
+            return res.status(500).json({ success: false, error: 'Invalid merchant wallet configuration' });
+        }
+
         const userPublicKey = new solanaWeb3.PublicKey(userWallet);
+        const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
 
         const lamports = Math.round(amountSol * solanaWeb3.LAMPORTS_PER_SOL);
         console.log('[SolTransaction] Amount in lamports:', lamports);
@@ -3645,7 +3711,6 @@ app.post('/create-sol-transaction', async (req, res) => {
         const serializedTx = transaction.serialize({ requireAllSignatures: false });
         const transactionBase64 = Buffer.from(serializedTx).toString('base64');
 
-        // Store the pending order
         await db.collection('pending_orders').insertOne({
             transactionId: transactionBase64,
             userWallet,
@@ -3660,8 +3725,8 @@ app.post('/create-sol-transaction', async (req, res) => {
         console.log('[SolTransaction] Transaction created:', transactionBase64);
         res.json({ success: true, transaction: transactionBase64 });
     } catch (error) {
-        console.error('[SolTransaction] Error:', error.message);
-        res.status(500).json({ success: false, error: 'Failed to create SOL transaction' });
+        console.error('[SolTransaction] Error:', error.message, error.stack);
+        res.status(500).json({ success: false, error: 'Failed to create SOL transaction', details: error.message });
     }
 });
 
