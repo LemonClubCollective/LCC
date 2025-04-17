@@ -786,7 +786,7 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create charge');
             }
             window.open(paymentResult.chargeUrl, '_blank');
-            alert('Please complete the payment. Your order will be placed after payment confirmation.');
+            alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
             document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'stripe') {
             const stripeResponse = await fetch('/create-stripe-checkout', {
@@ -806,7 +806,6 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
             }
             window.open(paymentResult.url, '_blank'); // Open Stripe in new window
-            alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
             document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'paypal') {
             const paypalResponse = await fetch('/create-paypal-order', {
@@ -826,7 +825,7 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create PayPal order');
             }
             window.open(paymentResult.url, '_blank');
-            alert('Please complete the payment. Your order will be placed after payment confirmation.');
+            alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
             document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'sol') {
             if (!walletAddress) {

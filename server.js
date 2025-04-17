@@ -3685,10 +3685,12 @@ app.post('/create-sol-transaction', async (req, res) => {
 
         let serverWallet;
         try {
-            // Log key for debugging (partially masked)
             console.log('[SolTransaction] WALLET_PRIVATE_KEY (partial):', privateKey.slice(0, 8) + '...');
             const decodedKey = bs58.decode(privateKey);
             console.log('[SolTransaction] Decoded key length:', decodedKey.length);
+            if (decodedKey.length !== 64) {
+                throw new Error('Invalid private key length; expected 64 bytes');
+            }
             serverWallet = solanaWeb3.Keypair.fromSecretKey(decodedKey).publicKey;
             console.log('[SolTransaction] Server wallet public key:', serverWallet.toBase58());
         } catch (error) {
