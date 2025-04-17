@@ -2,6 +2,7 @@
 let loggedInUsername = null;
 let loggedInProfilePic = null;
 let isAdmin = false;
+let solPrice = null;
 let lemonadePoints = bigInt(0);
 let stakingPoints = bigInt(0);
 let arcadePoints = bigInt(0);
@@ -269,6 +270,22 @@ async function checkSession() {
         console.error('[CheckSession] Error:', error.message);
     }
 }
+
+async function fetchSolPrice() {
+    try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {
+            method: 'GET'
+        });
+        const data = await response.json();
+        solPrice = data.solana.usd;
+        console.log('[SolPrice] Fetched SOL price:', solPrice, 'USD');
+        return solPrice;
+    } catch (error) {
+        console.error('[SolPrice] Error fetching SOL price:', error.message);
+        return null;
+    }
+}
+
 
 // Update login function to handle form submission
 async function login(event) {
@@ -704,6 +721,26 @@ function updatePaymentFields() {
 }
 
 
+// Add at the top of scripts.js (around line 10)
+let solPrice = null; // Cache SOL price in USD
+
+// Add after checkSession (around line 300)
+async function fetchSolPrice() {
+    try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd', {
+            method: 'GET'
+        });
+        const data = await response.json();
+        solPrice = data.solana.usd;
+        console.log('[SolPrice] Fetched SOL price:', solPrice, 'USD');
+        return solPrice;
+    } catch (error) {
+        console.error('[SolPrice] Error fetching SOL price:', error.message);
+        return null;
+    }
+}
+
+// Update completePurchase (around line 851)
 async function completePurchase() {
     if (!loggedInUsername) {
         alert('Please login to buy merch!');
@@ -772,9 +809,7 @@ async function completePurchase() {
             if (!stripeResponse.ok || !paymentResult.success) {
                 throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
             }
-            window.open(paymentResult.url, '_blank');
-            alert('Please complete the payment. Your order will be placed after payment confirmation.');
-            document.getElementById('checkout-modal').classList.remove('active');
+            window.location.href = paymentResult.url;
         } else if (method === 'paypal') {
             const paypalResponse = await fetch('/create-paypal-order', {
                 method: 'POST',
@@ -800,12 +835,26 @@ async function completePurchase() {
                 alert('Connect Solana wallet to pay with SOL!');
                 return;
             }
+            if (!window.solanaWeb3) {
+                alert('Solana Web3 library not loaded. Please refresh and try again.');
+                return;
+            }
+            if (!solPrice) {
+                solPrice = await fetchSolPrice();
+                if (!solPrice) {
+                    throw new Error('Failed to fetch SOL price');
+                }
+            }
+            const amountSol = window.currentPrice / solPrice;
+            console.log('[CompletePurchase] SOL amount:', amountSol, 'for $', window.currentPrice);
+            alert(`You will pay ${amountSol.toFixed(4)} SOL for $${window.currentPrice.toFixed(2)}`);
+
             const solResponse = await fetch('/create-sol-transaction', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     userWallet: walletAddress, 
-                    amount: window.currentPrice,
+                    amountSol: amountSol,
                     productId: window.currentProductId,
                     variantId: window.currentVariantId,
                     address: address
@@ -817,9 +866,10 @@ async function completePurchase() {
                 throw new Error(paymentResult.error || 'Failed to create SOL transaction');
             }
 
-            const transaction = solanaWeb3.Transaction.from(Buffer.from(paymentResult.transaction, 'base64'));
+            const transaction = window.solanaWeb3.Transaction.from(Buffer.from(paymentResult.transaction, 'base64'));
             const signature = await window.solana.signAndSendTransaction(transaction);
-            await solanaWeb3.connection.confirmTransaction(signature);
+            const connection = new window.solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+            await connection.confirmTransaction(signature);
 
             const orderResponse = await fetch('/printify-order', {
                 method: 'POST',

@@ -1864,40 +1864,160 @@ app.post('/create-charge', async (req, res) => {
 });
 
 
-// Add Stripe endpoint
 app.post('/create-stripe-checkout', async (req, res) => {
+    console.log('[StripeCheckout] Received request:', req.body);
     try {
-        const { username, amount } = req.body;
-        if (!username || !amount) {
+        const { username, amount, productId, variantId, address } = req.body;
+        if (!username || !amount || !productId || !variantId || !address) {
+            console.error('[StripeCheckout] Missing required fields');
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        if (!user) {
+            console.error('[StripeCheckout] User not found:', username);
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
 
+        // Store pending order in session
+        req.session.pendingOrder = { username, productId, variantId, address, amount };
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
                 price_data: {
                     currency: 'usd',
-                    product_data: { name: 'Lemon Club Merch Purchase' },
+                    product_data: { name: 'Merch Purchase' },
                     unit_amount: Math.round(amount * 100) // Convert to cents
                 },
                 quantity: 1
             }],
             mode: 'payment',
-            success_url: `http://localhost:8080/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `http://localhost:8080/cancel`,
-            metadata: { username }
+            success_url: 'https://www.lemonclubcollective.com/stripe-success',
+            cancel_url: 'https://www.lemonclubcollective.com/cancel'
         });
 
-
+        console.log('[StripeCheckout] Session created:', session.id);
         res.json({ success: true, url: session.url });
     } catch (error) {
-        console.error('[CreateStripeCheckout] Error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('[StripeCheckout] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to create Stripe checkout' });
+    }
+});
+
+app.get('/stripe-success', async (req, res) => {
+    console.log('[StripeSuccess] Handling success redirect');
+    try {
+        const { username, productId, variantId, address } = req.session.pendingOrder || {};
+        if (!username || !productId || !variantId || !address) {
+            console.error('[StripeSuccess] Missing pending order data');
+            return res.redirect('/cancel');
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user || !user.email) {
+            console.error('[StripeSuccess] User or email not found:', username);
+            return res.redirect('/cancel');
+        }
+
+        const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+        const [firstName, ...lastNameParts] = fullName.split(' ');
+        const lastName = lastNameParts.join(' ');
+        const countryCode = countryToIsoCode[country];
+        if (!countryCode) {
+            console.error('[StripeSuccess] Unsupported country:', country);
+            throw new Error(`Unsupported country: ${country}`);
+        }
+
+        const printifyApiToken = process.env.PRINTIFY_API_KEY;
+        const shopId = process.env.PRINTIFY_SHOP_ID;
+
+        const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const productData = await productResponse.json();
+        if (!productResponse.ok) {
+            console.error('[StripeSuccess] Failed to fetch product:', productData.errors?.reason);
+            throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+        }
+
+        const variant = productData.variants.find(v => v.id === parseInt(variantId));
+        if (!variant) {
+            console.error('[StripeSuccess] Variant not found:', variantId);
+            throw new Error('Variant not found');
+        }
+
+        const orderData = {
+            line_items: [{
+                product_id: productId,
+                variant_id: parseInt(variantId),
+                quantity: 1
+            }],
+            shipping_method: 1,
+            send_shipping_notification: true,
+            address_to: {
+                first_name: firstName,
+                last_name: lastName || '',
+                email: user.email,
+                phone: 'N/A',
+                country: countryCode,
+                region: state,
+                address1: street,
+                address2: '',
+                city: city,
+                zip: zip
+            }
+        };
+
+        const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+        });
+        const orderResult = await orderResponse.json();
+        console.log('[StripeSuccess] Printify order response:', orderResult);
+
+        if (!orderResponse.ok) {
+            console.error('[StripeSuccess] Failed to create order:', orderResult.errors?.reason);
+            throw new Error(orderResult.errors?.reason || 'Failed to create order');
+        }
+
+        const order = {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+            price: variant.price / 100,
+            timestamp: Date.now(),
+            status: 'Pending'
+        };
+        if (!user.orders) user.orders = [];
+        user.orders.push(order);
+        await db.collection('users').updateOne(
+            { username: { $regex: `^${username}$`, $options: 'i' } },
+            { $set: { orders: user.orders } }
+        );
+        users[username.toLowerCase()] = user;
+        await saveData(users, 'users');
+
+        await sendOrderConfirmationEmail(user.email, username, {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            price: variant.price / 100,
+            shippingAddress: address
+        });
+
+        delete req.session.pendingOrder; // Clear pending order
+        res.redirect('/success');
+    } catch (error) {
+        console.error('[StripeSuccess] Error:', error.message);
+        res.redirect('/cancel');
     }
 });
 
@@ -3495,42 +3615,53 @@ app.post('/paypal-webhook', express.json(), async (req, res) => {
 });
 
 app.post('/create-sol-transaction', async (req, res) => {
+    console.log('[SolTransaction] Received request:', req.body);
     try {
-        const { userWallet, amount, productId, variantId, address } = req.body;
-        if (!userWallet || !amount || !productId || !variantId || !address) {
+        const { userWallet, amountSol, productId, variantId, address } = req.body;
+        if (!userWallet || !amountSol || !productId || !variantId || !address) {
+            console.error('[SolTransaction] Missing required fields');
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-        const userPubkey = new PublicKey(userWallet);
-        const lamports = Math.round(amount * solanaWeb3.LAMPORTS_PER_SOL);
+        const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+        const merchantWallet = new solanaWeb3.PublicKey(process.env.MERCHANT_WALLET_PUBLIC_KEY);
+        const userPublicKey = new solanaWeb3.PublicKey(userWallet);
+
+        const lamports = Math.round(amountSol * solanaWeb3.LAMPORTS_PER_SOL);
+        console.log('[SolTransaction] Amount in lamports:', lamports);
+
         const transaction = new solanaWeb3.Transaction().add(
             solanaWeb3.SystemProgram.transfer({
-                fromPubkey: userPubkey,
-                toPubkey: wallet.publicKey,
-                lamports: lamports
+                fromPubkey: userPublicKey,
+                toPubkey: merchantWallet,
+                lamports
             })
         );
-        const { blockhash } = await connection.getLatestBlockhash();
+
+        const { blockhash } = await connection.getLatestBlockhash('recent');
         transaction.recentBlockhash = blockhash;
-        transaction.feePayer = userPubkey;
+        transaction.feePayer = userPublicKey;
+
         const serializedTx = transaction.serialize({ requireAllSignatures: false });
+        const transactionBase64 = Buffer.from(serializedTx).toString('base64');
 
         // Store the pending order
         await db.collection('pending_orders').insertOne({
-            transactionId: serializedTx.toString('base64'),
+            transactionId: transactionBase64,
             userWallet,
             productId,
             variantId,
             address,
-            amount,
+            amountSol,
             paymentMethod: 'sol',
             createdAt: Date.now()
         });
 
-        res.json({ success: true, transaction: Buffer.from(serializedTx).toString('base64') });
+        console.log('[SolTransaction] Transaction created:', transactionBase64);
+        res.json({ success: true, transaction: transactionBase64 });
     } catch (error) {
-        console.error('[CreateSolTransaction] Error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('[SolTransaction] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to create SOL transaction' });
     }
 });
 
