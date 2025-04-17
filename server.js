@@ -3678,48 +3678,34 @@ app.post('/create-sol-transaction', async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-        const privateKey = process.env.WALLET_PRIVATE_KEY;
-        if (!privateKey) {
-            console.error('[SolTransaction] WALLET_PRIVATE_KEY not set');
-            return res.status(500).json({ success: false, error: 'Server configuration error: Missing wallet key' });
+        console.log('[SolTransaction] User wallet received:', userWallet);
+        if (!wallet || !wallet.publicKey) {
+            console.error('[SolTransaction] Server wallet not initialized');
+            return res.status(500).json({ success: false, error: 'Server wallet not initialized' });
         }
-
-        let serverWallet;
-        try {
-            console.log('[SolTransaction] WALLET_PRIVATE_KEY length:', privateKey.length);
-            console.log('[SolTransaction] WALLET_PRIVATE_KEY (partial):', privateKey.slice(0, 8) + '...' + privateKey.slice(-8));
-            const decodedKey = bs58.decode(privateKey);
-            console.log('[SolTransaction] Decoded key length:', decodedKey.length);
-            if (decodedKey.length !== 64) {
-                throw new Error(`Invalid private key length; expected 64 bytes, got ${decodedKey.length}`);
-            }
-            const keypair = solanaWeb3.Keypair.fromSecretKey(decodedKey);
-            serverWallet = keypair.publicKey;
-            console.log('[SolTransaction] Server wallet public key:', serverWallet.toBase58());
-            if (serverWallet.toBase58() !== '8FCLTy8wVAuqjSQVmifzqc9fzcLimuUNA21zbGZ9Nkvf') {
-                console.error('[SolTransaction] Public key mismatch; expected 8FCLTy8wVAuqjSQVmifzqc9fzcLimuUNA21zbGZ9Nkvf, got', serverWallet.toBase58());
-                throw new Error('Wallet public key mismatch');
-            }
-        } catch (error) {
-            console.error('[SolTransaction] Invalid WALLET_PRIVATE_KEY:', error.message, error.stack);
-            return res.status(500).json({ success: false, error: 'Invalid wallet configuration', details: error.message });
+        const serverWallet = wallet.publicKey;
+        console.log('[SolTransaction] Server wallet public key:', serverWallet.toBase58());
+        if (serverWallet.toBase58() !== '8FCLTy8wVAuqjSQVmifzqc9fzcLimuUNA21zbGZ9Nkvf') {
+            console.error('[SolTransaction] Public key mismatch; expected 8FCLTy8wVAuqjSQVmifzqc9fzcLimuUNA21zbGZ9Nkvf, got', serverWallet.toBase58());
+            return res.status(500).json({ success: false, error: 'Wallet public key mismatch' });
         }
 
         let userPublicKey;
         try {
-            userPublicKey = new solanaWeb3.PublicKey(userWallet);
+            userPublicKey = new PublicKey(userWallet);
+            console.log('[SolTransaction] Validated user wallet:', userPublicKey.toBase58());
         } catch (error) {
-            console.error('[SolTransaction] Invalid user wallet:', userWallet, error.message);
-            return res.status(400).json({ success: false, error: 'Invalid user wallet address' });
+            console.error('[SolTransaction] Invalid user wallet:', userWallet, 'Error:', error.message);
+            return res.status(400).json({ success: false, error: 'Invalid user wallet address', details: error.message });
         }
 
-        const connection = new solanaWeb3.Connection('https://api.devnet.solana.com', 'confirmed');
+        const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
-        const lamports = Math.round(amountSol * solanaWeb3.LAMPORTS_PER_SOL);
+        const lamports = Math.round(amountSol * LAMPORTS_PER_SOL);
         console.log('[SolTransaction] Amount in lamports:', lamports);
 
-        const transaction = new solanaWeb3.Transaction().add(
-            solanaWeb3.SystemProgram.transfer({
+        const transaction = new Transaction().add(
+            SystemProgram.transfer({
                 fromPubkey: userPublicKey,
                 toPubkey: serverWallet,
                 lamports
@@ -3748,35 +3734,70 @@ app.post('/create-sol-transaction', async (req, res) => {
         res.json({ success: true, transaction: transactionBase64 });
     } catch (error) {
         console.error('[SolTransaction] Error:', error.message, error.stack);
-        res.status(500).json({ success: false, error: 'Failed to create SOL transaction', details: error.message });
+        return res.status(500).json({ success: false, error: 'Failed to create SOL transaction', details: error.message });
     }
 });
+
+
 async function sendOrderConfirmationEmail(to, username, orderDetails) {
     console.log('[OrderEmail] Sending confirmation to:', to);
     try {
-        const emailParams = {
-            from: { email: process.env.MAILERSEND_FROM_EMAIL, name: 'Lemon Club Collective' },
-            to: [{ email: to }],
-            subject: `Your Order #${orderDetails.orderId} is Confirmed! 🍋`,
-            html: `
-                <div style="font-family: 'Chelsea Market', cursive; color: #228b22; text-align: center; padding: 20px;">
-                    <h1 style="color: #ff4500;">Thank You, ${username}!</h1>
-                    <p>Your order is confirmed and ready to make your day zestier!</p>
-                    <h2>Order Details</h2>
-                    <p><strong>Order ID:</strong> ${orderDetails.orderId}</p>
-                    <p><strong>Product:</strong> ${orderDetails.productTitle}</p>
-                    <p><strong>Price:</strong> $${orderDetails.price.toFixed(2)}</p>
-                    <p><strong>Shipping Address:</strong> ${orderDetails.shippingAddress}</p>
-                    <p>Track your order or reach out at <a href="https://www.lemonclubcollective.com/support" style="color: #ff4500;">support</a>.</p>
-                    <p style="color: #ff4500;">Keep growing those lemons! 🍋</p>
-                    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lcclogo.png" alt="LCC Logo" style="width: 100px; margin-top: 20px;">
-                </div>
-            `
+        if (!transporter) {
+            console.error('[OrderEmail] Transporter not initialized');
+            throw new Error('Email transporter not initialized');
+        }
+        const command = {
+            input: {
+                Source: 'no-reply@lemonclubcollective.com',
+                Destination: {
+                    ToAddresses: [to]
+                },
+                Message: {
+                    Subject: {
+                        Data: `Your Order #${orderDetails.orderId} is Confirmed! 🍋`
+                    },
+                    Body: {
+                        Html: {
+                            Data: `
+                                <div style="font-family: 'Chelsea Market', cursive; color: #228b22; text-align: center; padding: 20px;">
+                                    <h1 style="color: #ff4500;">Thank You, ${username}!</h1>
+                                    <p>Your order is confirmed and ready to make your day zestier!</p>
+                                    <h2>Order Details</h2>
+                                    <p><strong>Order ID:</strong> ${orderDetails.orderId}</p>
+                                    <p><strong>Product:</strong> ${orderDetails.productTitle}</p>
+                                    <p><strong>Price:</strong> $${orderDetails.price.toFixed(2)}</p>
+                                    <p><strong>Shipping Address:</strong> ${orderDetails.shippingAddress}</p>
+                                    <p>Track your order or reach out at <a href="https://www.lemonclubcollective.com/support" style="color: #ff4500;">support</a>.</p>
+                                    <p style="color: #ff4500;">Keep growing those lemons! 🍋</p>
+                                    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lcclogo.png" alt="LCC Logo" style="width: 100px; margin-top: 20px;">
+                                </div>
+                            `
+                        },
+                        Text: {
+                            Data: `
+Your Order #${orderDetails.orderId} is Confirmed!
+
+Thank You, ${username}!
+Your order is confirmed and ready to make your day zestier!
+
+Order Details:
+Order ID: ${orderDetails.orderId}
+Product: ${orderDetails.productTitle}
+Price: $${orderDetails.price.toFixed(2)}
+Shipping Address: ${orderDetails.shippingAddress}
+
+Track your order or reach out at https://www.lemonclubcollective.com/support.
+Keep growing those lemons! 🍋
+                            `
+                        }
+                    }
+                }
+            }
         };
-        await mailerSend.email.send(emailParams);
+        await transporter.send(command);
         console.log('[OrderEmail] Confirmation sent to:', to);
     } catch (error) {
-        console.error('[OrderEmail] Error:', error.message);
+        console.error('[OrderEmail] Error:', error.message, error.stack);
         throw new Error('Failed to send order confirmation email');
     }
 }

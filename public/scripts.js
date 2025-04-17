@@ -836,6 +836,12 @@ async function completePurchase() {
                 alert('Solana Web3 library not loaded. Please refresh and try again.');
                 return;
             }
+	    console.log('[CompletePurchase] User wallet address:', walletAddress);
+            // Validate walletAddress format
+            if (!walletAddress.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)) {
+                console.error('[CompletePurchase] Invalid wallet address format:', walletAddress);
+                throw new Error('Invalid wallet address format');
+            }
             if (!solPrice) {
                 solPrice = await fetchSolPrice();
                 if (!solPrice) {
@@ -2532,13 +2538,7 @@ function disconnectWallet() {
  }
 
 
-
-
-
-
-
-
-      async function subscribe() {
+async function subscribe() {
     if (!loggedInUsername) {
         alert('Please login to subscribe!');
         return;
