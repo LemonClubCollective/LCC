@@ -1948,79 +1948,87 @@ app.post('/create-charge', async (req, res) => {
 app.post('/create-stripe-checkout', async (req, res) => {
     console.log('[StripeCheckout] Received request:', req.body);
     try {
-        const { username, amount, productId, variantId, address } = req.body;
+        const { username, amount, productId, variantId, address, shippingMethodId, shippingCost } = req.body;
+
+        // Validate required fields
         if (!username || !amount || !productId || !variantId || !address) {
             console.error('[StripeCheckout] Missing required fields');
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
+        // Check user existence
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user) {
             console.error('[StripeCheckout] User not found:', username);
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
-        // Store pending order in session
-        req.session.pendingOrder = { username, productId, variantId, address, amount };
+        // Store pending order in session if shipping details are provided
+        if (shippingMethodId && shippingCost !== undefined) {
+            req.session.pendingOrder = { username, productId, variantId, address, amount, shippingMethodId, shippingCost };
+            console.log('[StripeCheckout] Stored pending order in session:', req.session.pendingOrder);
+        }
 
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [{
+        // Prepare line items for Stripe checkout
+        const lineItems = [
+            {
                 price_data: {
                     currency: 'usd',
                     product_data: { name: 'Merch Purchase' },
-                    unit_amount: Math.round(amount * 100) // Convert to cents
+                    unit_amount: Math.round((shippingCost !== undefined ? amount - shippingCost : amount) * 100)
                 },
                 quantity: 1
-            }],
-            mode: 'payment',
-            success_url: 'https://www.lemonclubcollective.com/stripe-success',
-            cancel_url: 'https://www.lemonclubcollective.com/cancel'
-        });
+            }
+        ];
 
-        console.log('[StripeCheckout] Session created:', session.id);
-        res.json({ success: true, url: session.url });
-    } catch (error) {
-        console.error('[StripeCheckout] Error:', error.message);
-        res.status(500).json({ success: false, error: 'Failed to create Stripe checkout' });
-    }
-});
-
-app.post('/create-stripe-checkout', async (req, res) => {
-    console.log('[StripeCheckout] Received request:', req.body);
-    try {
-        const { username, amount, productId, variantId, address } = req.body;
-        if (!username || !amount || !productId || !variantId || !address) {
-            console.error('[StripeCheckout] Missing required fields');
-            return res.status(400).json({ success: false, error: 'Missing required fields' });
-        }
-
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) {
-            console.error('[StripeCheckout] User not found:', username);
-            return res.status(404).json({ success: false, error: 'User not found' });
-        }
-
-        req.session.pendingOrder = { username, productId, variantId, address, amount };
-        console.log('[StripeCheckout] Stored pending order in session:', req.session.pendingOrder);
-
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: [{
+        // Add shipping cost as a separate line item if provided
+        if (shippingCost !== undefined) {
+            lineItems.push({
                 price_data: {
                     currency: 'usd',
-                    product_data: { name: 'Merch Purchase' },
-                    unit_amount: Math.round(amount * 100)
+                    product_data: { name: 'Shipping' },
+                    unit_amount: Math.round(shippingCost * 100)
                 },
                 quantity: 1
-            }],
+            });
+        }
+
+        // Create Stripe checkout session
+        const session = await stripe.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: lineItems,
             mode: 'payment',
-            success_url: 'https://www.lemonclubcollective.com/stripe-success?session_id={CHECKOUT_SESSION_ID}',
+            success_url: `https://www.lemonclubcollective.com/${
+                shippingCost !== undefined ? 'stripe-success' : 'success'
+            }?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: 'https://www.lemonclubcollective.com/cancel',
-            metadata: { username, productId, variantId, address }
+            metadata: { 
+                username, 
+                productId, 
+                variantId, 
+                address, 
+                type: 'merch_purchase',
+                ...(shippingMethodId && { shippingMethodId }),
+                ...(shippingCost !== undefined && { shippingCost: shippingCost.toString() })
+            }
         });
 
         console.log('[StripeCheckout] Session created:', session.id);
+
+        // Store pending order in database if no shipping details (from first function)
+        if (!shippingMethodId && shippingCost === undefined) {
+            await db.collection('pending_orders').insertOne({
+                sessionId: session.id,
+                username,
+                productId,
+                variantId,
+                address,
+                amount,
+                paymentMethod: 'stripe',
+                createdAt: Date.now()
+            });
+        }
+
         res.json({ success: true, url: session.url });
     } catch (error) {
         console.error('[StripeCheckout] Error:', error.message);
@@ -2044,8 +2052,8 @@ app.get('/stripe-success', async (req, res) => {
             return res.redirect('/cancel');
         }
 
-        const { username, productId, variantId, address } = session.metadata || req.session.pendingOrder || {};
-        if (!username || !productId || !variantId || !address) {
+        const { username, productId, variantId, address, shippingMethodId, shippingCost } = session.metadata || req.session.pendingOrder || {};
+        if (!username || !productId || !variantId || !address || !shippingMethodId || !shippingCost) {
             console.error('[StripeSuccess] Missing order data, metadata:', session.metadata, 'session:', req.session.pendingOrder);
             return res.redirect('/cancel');
         }
@@ -2094,7 +2102,7 @@ app.get('/stripe-success', async (req, res) => {
                 variant_id: parseInt(variantId),
                 quantity: 1
             }],
-            shipping_method: 1,
+            shipping_method: parseInt(shippingMethodId),
             send_shipping_notification: true,
             address_to: {
                 first_name: firstName,
@@ -2131,6 +2139,7 @@ app.get('/stripe-success', async (req, res) => {
             productTitle: productData.title,
             image: productData.images[0]?.src || 'https://via.placeholder.com/100',
             price: variant.price / 100,
+            shippingCost: parseFloat(shippingCost), // Use metadata shipping cost
             timestamp: Date.now(),
             status: 'Pending'
         };
@@ -2147,6 +2156,7 @@ app.get('/stripe-success', async (req, res) => {
             orderId: orderResult.id,
             productTitle: productData.title,
             price: variant.price / 100,
+            shippingCost: parseFloat(shippingCost),
             shippingAddress: address
         });
 
