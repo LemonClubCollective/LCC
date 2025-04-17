@@ -2037,6 +2037,11 @@ app.post('/create-stripe-checkout', async (req, res) => {
 });
 
 app.get('/stripe-success', async (req, res) => {
+    console.log('[StripeSuccess] Request received:', {
+        query: req.query,
+        headers: req.headers,
+        session: req.session
+    });
     console.log('[StripeSuccess] Handling success redirect, session_id:', req.query.session_id);
     try {
         const sessionId = req.query.session_id;
@@ -2046,7 +2051,7 @@ app.get('/stripe-success', async (req, res) => {
         }
 
         const session = await stripe.checkout.sessions.retrieve(sessionId);
-        console.log('[StripeSuccess] Session data:', session);
+        console.log('[StripeSuccess] Session data:', JSON.stringify(session, null, 2));
         if (session.payment_status !== 'paid') {
             console.error('[StripeSuccess] Payment not completed, status:', session.payment_status);
             return res.redirect('/cancel');
@@ -2139,7 +2144,7 @@ app.get('/stripe-success', async (req, res) => {
             productTitle: productData.title,
             image: productData.images[0]?.src || 'https://via.placeholder.com/100',
             price: variant.price / 100,
-            shippingCost: parseFloat(shippingCost), // Use metadata shipping cost
+            shippingCost: parseFloat(shippingCost),
             timestamp: Date.now(),
             status: 'Pending'
         };
@@ -2161,7 +2166,8 @@ app.get('/stripe-success', async (req, res) => {
         });
 
         delete req.session.pendingOrder;
-        res.redirect('/success');
+        console.log('[StripeSuccess] Redirecting to /success with session_id:', sessionId);
+        res.redirect(`/success?session_id=${sessionId}`); // Pass session_id
     } catch (error) {
         console.error('[StripeSuccess] Error:', error.message, error.stack);
         res.redirect('/cancel');
@@ -3262,27 +3268,39 @@ app.post('/checkout', async (req, res) => {
 
 app.get('/success', async (req, res) => {
     try {
-        const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
+        const sessionId = req.query.session_id;
+        if (!sessionId) {
+            console.error('[Success] Missing session_id');
+            return res.send('Payment not completed. <a href="/">Return to site</a>');
+        }
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        console.log('[Success] Session data:', session);
         if (session.payment_status === 'paid') {
-            const username = session.metadata.username;
-            users[username].isPremium = true;
-            users[username].subscriptionId = session.subscription;
-            await saveData(users, 'users');
-            res.send('Subscription successful! <a href="/">Return to site</a>');
+            // Handle both subscription and one-time payments
+            if (session.mode === 'subscription') {
+                const username = session.metadata.username;
+                users[username].isPremium = true;
+                users[username].subscriptionId = session.subscription;
+                await saveData(users, 'users');
+                res.send('Subscription successful! <a href="/">Return to site</a>');
+            } else {
+                res.send('Order placed successfully! Check your email for confirmation. <a href="/">Return to site</a>');
+            }
         } else {
             res.send('Payment not completed. <a href="/">Return to site</a>');
         }
     } catch (error) {
-        console.error('[Success] Error:', error.message);
-        res.status(500).send('Error verifying payment');
+        console.error('[Success] Error:', error.message, error.stack);
+        res.send('Error verifying payment: ' + error.message);
     }
 });
 
 
 app.get('/cancel', (req, res) => {
-    res.send('Payment canceled. <a href="/">Return to site</a>');
+    const error = req.query.error || 'Payment was cancelled or failed.';
+    console.log('[Cancel] Request received:', { query: req.query });
+    res.send(`Payment failed: ${error}. <a href="/">Return to site</a>`);
 });
-
 
 app.post('/coinbase-checkout', async (req, res) => {
     try {
@@ -3454,81 +3472,94 @@ app.post('/store/purchase/:username/:itemId', async (req, res) => {
 
 
 app.post('/create-stripe-checkout', async (req, res) => {
+    console.log('[StripeCheckout] Received request:', req.body);
     try {
-        const { username, amount, productId, variantId, address } = req.body;
-        if (!username || !amount || !productId || !variantId || !address) {
+        const { username, amount, productId, variantId, address, shippingMethodId, shippingCost } = req.body;
+        if (!username || !amount || !productId || !variantId || !address || !shippingMethodId || shippingCost === undefined) {
+            console.error('[StripeCheckout] Missing required fields');
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
-
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             line_items: [{
                 price_data: {
                     currency: 'usd',
-                    product_data: { name: 'Lemon Club Merch Purchase' },
-                    unit_amount: Math.round(amount * 100)
+                    product_data: { name: 'Merch Purchase' },
+                    unit_amount: Math.round(amount * 100), // Convert to cents
                 },
-                quantity: 1
+                quantity: 1,
             }],
             mode: 'payment',
-            success_url: `https://www.lemonclubcollective.com/success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `https://www.lemonclubcollective.com/cancel`,
-            metadata: { 
-                username,
-                productId,
-                variantId,
-                address,
-                type: 'merch_purchase'
-            }
+            success_url: `https://www.lemonclubcollective.com/stripe-success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: 'https://www.lemonclubcollective.com/cancel',
+            metadata: { username, productId, variantId, address, shippingMethodId, shippingCost: shippingCost.toString() }
         });
 
-        await db.collection('pending_orders').insertOne({
-            sessionId: session.id,
-            username,
-            productId,
-            variantId,
-            address,
-            amount,
-            paymentMethod: 'stripe',
-            createdAt: Date.now()
-        });
-
-        res.json({ success: true, url: session.url });
+        req.session.pendingOrder = { username, productId, variantId, address, amount, shippingMethodId, shippingCost };
+        console.log('[StripeCheckout] Stored pending order in session:', req.session.pendingOrder);
+        console.log('[StripeCheckout] Session created:', session.id);
+        res.json({ success: true, url: session.url, sessionId: session.id });
     } catch (error) {
-        console.error('[CreateStripeCheckout] Error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        console.error('[StripeCheckout] Error:', error.message, error.stack);
+        res.status(500).json({ success: false, error: 'Failed to create checkout session' });
     }
 });
 
-
-app.post('/stripe-webhook', express.json(), async (req, res) => {
+app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
     try {
-        const event = req.body;
-        console.log('[StripeWebhook] Received:', JSON.stringify(event, null, 2));
+        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        console.log('[Webhook] Event received:', event.type, JSON.stringify(event.data.object, null, 2));
+    } catch (err) {
+        console.error('[Webhook] Signature verification failed:', err.message);
+        return res.status(400).send('Webhook Error');
+    }
 
+    try {
         if (event.type === 'checkout.session.completed') {
             const session = event.data.object;
-            const metadata = session.metadata;
-            const username = metadata.username;
             const sessionId = session.id;
+            const metadata = session.metadata || {};
+            const username = metadata.username;
+
+            if (session.payment_status !== 'paid') {
+                console.error('[Webhook] Payment not completed, status:', session.payment_status);
+                return res.status(200).send('Received');
+            }
+
+            // Check if order was already processed by /stripe-success
+            const existingOrder = await db.collection('users').findOne({
+                username: { $regex: `^${username}$`, $options: 'i' },
+                'orders.sessionId': sessionId
+            });
+            if (existingOrder) {
+                console.log('[Webhook] Order already processed for session:', sessionId);
+                return res.status(200).send('Received');
+            }
 
             const pendingOrder = await db.collection('pending_orders').findOne({ sessionId, paymentMethod: 'stripe' });
             if (!pendingOrder) {
-                console.error('[StripeWebhook] Pending order not found for session:', sessionId);
-                return res.sendStatus(200);
+                console.error('[Webhook] Pending order not found for session:', sessionId);
+                return res.status(200).send('Received');
             }
 
-            const { productId, variantId, address } = pendingOrder;
+            const { productId, variantId, address, shippingMethodId, shippingCost } = pendingOrder;
             const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
             const [firstName, ...lastNameParts] = fullName.split(' ');
             const lastName = lastNameParts.join(' ');
 
+            const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+            if (!user || !user.email) {
+                console.error('[Webhook] User or email not found:', username);
+                return res.status(200).send('Received');
+            }
+
             const countryCode = countryToIsoCode[country];
             if (!countryCode) {
-                throw new Error(`Unsupported country: ${country}`);
+                console.error('[Webhook] Unsupported country:', country);
+                return res.status(200).send('Received');
             }
 
             const printifyApiToken = process.env.PRINTIFY_API_KEY;
@@ -3543,16 +3574,23 @@ app.post('/stripe-webhook', express.json(), async (req, res) => {
             });
             const productData = await productResponse.json();
             if (!productResponse.ok) {
+                console.error('[Webhook] Failed to fetch product:', productData.errors?.reason);
                 throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+            }
+
+            const variant = productData.variants.find(v => v.id === parseInt(variantId));
+            if (!variant) {
+                console.error('[Webhook] Variant not found:', variantId);
+                throw new Error('Variant not found');
             }
 
             const orderData = {
                 line_items: [{
                     product_id: productId,
-                    variant_id: variantId,
+                    variant_id: parseInt(variantId),
                     quantity: 1
                 }],
-                shipping_method: 1,
+                shipping_method: parseInt(shippingMethodId),
                 send_shipping_notification: true,
                 address_to: {
                     first_name: firstName,
@@ -3577,19 +3615,22 @@ app.post('/stripe-webhook', express.json(), async (req, res) => {
                 body: JSON.stringify(orderData)
             });
             const orderResult = await orderResponse.json();
-            console.log('[PrintifyOrder] Response:', orderResult);
+            console.log('[Webhook] Printify order response:', orderResult);
 
             if (!orderResponse.ok) {
+                console.error('[Webhook] Failed to create order:', orderResult.errors?.reason);
                 throw new Error(orderResult.errors?.reason || 'Failed to create order');
             }
 
-            const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
             const order = {
                 orderId: orderResult.id,
                 productTitle: productData.title,
                 image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+                price: variant.price / 100,
+                shippingCost: parseFloat(shippingCost),
                 timestamp: Date.now(),
-                status: 'Pending'
+                status: 'Pending',
+                sessionId // Store sessionId to prevent duplicates
             };
             if (!user.orders) user.orders = [];
             user.orders.push(order);
@@ -3598,12 +3639,21 @@ app.post('/stripe-webhook', express.json(), async (req, res) => {
                 { $set: { orders: user.orders } }
             );
 
+            await sendOrderConfirmationEmail(user.email, username, {
+                orderId: orderResult.id,
+                productTitle: productData.title,
+                price: variant.price / 100,
+                shippingCost: parseFloat(shippingCost),
+                shippingAddress: address
+            });
+
             await db.collection('pending_orders').deleteOne({ sessionId });
+            console.log('[Webhook] Order processed successfully for session:', sessionId);
         }
 
-        res.sendStatus(200);
+        res.status(200).send('Received');
     } catch (error) {
-        console.error('[StripeWebhook] Error:', error.message);
+        console.error('[Webhook] Error:', error.message, error.stack);
         res.status(500).json({ error: 'Webhook processing failed' });
     }
 });

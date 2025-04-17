@@ -872,7 +872,7 @@ async function completePurchase() {
     }
 
     const selectedOption = shippingSelect.options[shippingSelect.selectedIndex];
-    const shippingCost = selectedOption && selectedOption.dataset.cost ? parseInt(selectedOption.dataset.cost) / 100 : 0; // Convert to dollars
+    const shippingCost = selectedOption && selectedOption.dataset.cost ? parseInt(selectedOption.dataset.cost) / 100 : 0;
 
     const address = `${shipping.firstName} ${shipping.lastName}, ${shipping.street}, ${shipping.city}, ${shipping.state}, ${shipping.zip}, ${shipping.country}`;
 
@@ -893,7 +893,7 @@ async function completePurchase() {
                     variantId: window.currentVariantId,
                     address: address,
                     shippingMethodId,
-                    shippingCost // Pass shipping cost
+                    shippingCost
                 }),
                 credentials: 'include'
             });
@@ -915,15 +915,17 @@ async function completePurchase() {
                     variantId: window.currentVariantId,
                     address: address,
                     shippingMethodId,
-                    shippingCost // Pass shipping cost
+                    shippingCost
                 }),
                 credentials: 'include'
             });
             paymentResult = await stripeResponse.json();
             if (!stripeResponse.ok || !paymentResult.success) {
+                console.error('[StripeCheckout] Failed to create session:', paymentResult.error);
                 throw new Error(paymentResult.error || 'Failed to create Stripe checkout');
             }
             window.open(paymentResult.url, '_blank');
+            alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
             document.getElementById('checkout-modal').classList.remove('active');
         } else if (method === 'paypal') {
             const paypalResponse = await fetch('/create-paypal-order', {
@@ -936,7 +938,7 @@ async function completePurchase() {
                     variantId: window.currentVariantId,
                     address: address,
                     shippingMethodId,
-                    shippingCost // Pass shipping cost
+                    shippingCost
                 }),
                 credentials: 'include'
             });
@@ -981,7 +983,7 @@ async function completePurchase() {
                     variantId: window.currentVariantId,
                     address: address,
                     shippingMethodId,
-                    shippingCost // Pass shipping cost
+                    shippingCost
                 }),
                 credentials: 'include'
             });
@@ -1004,7 +1006,7 @@ async function completePurchase() {
                     variantId: window.currentVariantId,
                     address: address,
                     shippingMethodId,
-                    shippingCost // Pass shipping cost
+                    shippingCost
                 }),
                 credentials: 'include'
             });
@@ -1028,6 +1030,36 @@ async function completePurchase() {
         alert('Failed to complete purchase: ' + error.message);
     }
 }
+
+async function checkPaymentStatus() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    if (sessionId && window.location.pathname === '/success') {
+        try {
+            const response = await fetch(`/success?session_id=${sessionId}`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+            const result = await response.text();
+	    console.log('[CheckPaymentStatus] Response:', result);
+            if (response.ok && result.includes('Order placed successfully')) {
+                alert('Your order was placed successfully! Check your email for confirmation.');
+            } else {
+                console.error('[CheckPaymentStatus] Payment verification failed:', result);
+                alert('Error verifying payment. Please check your order status.');
+            }
+        } catch (error) {
+            console.error('[CheckPaymentStatus] Error:', error.message);
+            alert('Error verifying payment: ' + error.message);
+        }
+    }
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', () => {
+    checkPaymentStatus();
+    // ... existing DOMContentLoaded code
+});
 
 async function updateNFTDisplay(containerId, showButtons = true) {
     console.log('[NFTDisplay] Starting update for container:', containerId);
