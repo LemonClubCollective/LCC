@@ -721,9 +721,6 @@ function updatePaymentFields() {
 }
 
 
-// Add at the top of scripts.js (around line 10)
-let solPrice = null; // Cache SOL price in USD
-
 // Add after checkSession (around line 300)
 async function fetchSolPrice() {
     try {
