@@ -3688,23 +3688,17 @@ app.post('/create-sol-transaction', async (req, res) => {
         try {
             console.log('[SolTransaction] WALLET_PRIVATE_KEY length:', privateKey.length);
             console.log('[SolTransaction] WALLET_PRIVATE_KEY (partial):', privateKey.slice(0, 8) + '...' + privateKey.slice(-8));
-            // Test base58 decoding
-            let decodedKey;
-            try {
-                decodedKey = bs58.decode(privateKey);
-            } catch (decodeError) {
-                throw new Error(`Base58 decoding failed: ${decodeError.message}`);
-            }
+            const decodedKey = bs58.decode(privateKey);
             console.log('[SolTransaction] Decoded key length:', decodedKey.length);
             if (decodedKey.length !== 64) {
                 throw new Error(`Invalid private key length; expected 64 bytes, got ${decodedKey.length}`);
             }
-            // Verify public key
             const keypair = solanaWeb3.Keypair.fromSecretKey(decodedKey);
             serverWallet = keypair.publicKey;
             console.log('[SolTransaction] Server wallet public key:', serverWallet.toBase58());
             if (serverWallet.toBase58() !== '8FCLTy8wVAuqjSQVmifzqc9fzcLimuUNA21zbGZ9Nkvf') {
-                console.warn('[SolTransaction] Public key mismatch; expected 8FCLTy8wVAuqjSQVmifzqc9fzcLimuUNA21zbGZ9Nkvf, got', serverWallet.toBase58());
+                console.error('[SolTransaction] Public key mismatch; expected 8FCLTy8wVAuqjSQVmifzqc9fzcLimuUNA21zbGZ9Nkvf, got', serverWallet.toBase58());
+                throw new Error('Wallet public key mismatch');
             }
         } catch (error) {
             console.error('[SolTransaction] Invalid WALLET_PRIVATE_KEY:', error.message, error.stack);
@@ -3757,7 +3751,6 @@ app.post('/create-sol-transaction', async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to create SOL transaction', details: error.message });
     }
 });
-
 async function sendOrderConfirmationEmail(to, username, orderDetails) {
     console.log('[OrderEmail] Sending confirmation to:', to);
     try {
