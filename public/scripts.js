@@ -977,7 +977,8 @@ async function completePurchase() {
     paymentResult = await paypalResponse.json();
     if (!paypalResponse.ok || !paymentResult.success) {
         console.error('[PayPalCheckout] Failed to create order:', paymentResult.error);
-        throw new Error(paymentResult.error || 'Failed to create PayPal order');
+        alert('Failed to create PayPal order: ' + paymentResult.error);
+        return;
     }
     const checkoutWindow = window.open(paymentResult.url, '_blank');
     if (!checkoutWindow) {
@@ -996,9 +997,9 @@ async function completePurchase() {
     setTimeout(() => notification.remove(), 5000);
     const baseUrl = 'https://www.lemonclubcollective.com';
     const startTime = Date.now();
-    const timeout = 2 * 60 * 1000; // 2 minutes
+    const timeout = 1 * 60 * 1000; // 1 minute
     let errorCount = 0;
-    const maxErrors = 5;
+    const maxErrors = 3;
     const checkStatus = setInterval(async () => {
         if (Date.now() - startTime > timeout || window.location.pathname === '/success' || checkoutWindow.closed) {
             clearInterval(checkStatus);
@@ -1011,7 +1012,7 @@ async function completePurchase() {
             return;
         }
         try {
-            const response = await fetch(`${baseUrl}/paypal-success?orderID=${paymentResult.orderId}`, {
+            const response = await fetch(`${baseUrl}/paypal-order-status/${paymentResult.orderId}`, {
                 method: 'GET',
                 credentials: 'include'
             });

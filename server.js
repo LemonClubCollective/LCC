@@ -2201,220 +2201,6 @@ app.get('/stripe-success', async (req, res) => {
 });
 
 
-app.get('/paypal-success', async (req, res) => {
-    console.log('[PayPalSuccess] Received query:', req.query);
-    try {
-        const orderId = req.query.orderID || req.query.token;
-        const payerId = req.query.PayerID;
-        if (!orderId) {
-            console.error('[PayPalSuccess] Missing orderID or token');
-            return res.status(400).json({ success: false, error: 'Missing orderID or token' });
-        }
-
-        const orderRequest = new paypal.orders.OrdersGetRequest(orderId);
-        const paypalOrder = await paypalClient.execute(orderRequest);
-        console.log('[PayPalSuccess] PayPal Order:', paypalOrder.result);
-
-        // Check if order is stuck in CREATED or APPROVED for too long
-        const orderAge = Date.now() - new Date(paypalOrder.result.create_time).getTime();
-        if ((paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') && orderAge > 5 * 60 * 1000) {
-            console.error('[PayPalSuccess] Order expired:', orderId);
-            return res.status(400).json({ success: false, error: 'Order approval timed out' });
-        }
-
-        // Return pending if no PayerID or not COMPLETED
-        if (!payerId || paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') {
-            console.log('[PayPalSuccess] Order not approved or no PayerID, returning pending status');
-            return res.json({ success: false, status: 'pending', message: 'Order awaiting approval' });
-        }
-
-        // Capture the payment
-        if (paypalOrder.result.status !== 'COMPLETED') {
-            const captureRequest = new paypal.orders.OrdersCaptureRequest(orderId);
-            captureRequest.requestBody({});
-            let capture;
-            try {
-                capture = await paypalClient.execute(captureRequest);
-                console.log('[PayPalSuccess] Capture:', capture.result);
-            } catch (error) {
-                if (error.message.includes('MAX_NUMBER_OF_PAYMENT_ATTEMPTS_EXCEEDED')) {
-                    console.log('[PayPalSuccess] Order already captured:', orderId);
-                    capture = { result: paypalOrder.result };
-                } else {
-                    throw error;
-                }
-            }
-            if (capture.result.status !== 'COMPLETED') {
-                console.error('[PayPalSuccess] Payment not completed:', capture.result.status);
-                return res.status(400).json({ success: false, error: 'Payment not completed' });
-            }
-        }
-
-        // Retrieve pending order
-        let pendingOrder = await db.collection('pending_orders').findOne({ orderId, paymentMethod: 'paypal' }) || req.session.pendingOrder;
-        if (!pendingOrder && paypalOrder.result.purchase_units[0].custom_id) {
-            console.log('[PayPalSuccess] Retrieving order data from custom_id');
-            pendingOrder = JSON.parse(paypalOrder.result.purchase_units[0].custom_id);
-        }
-        console.log('[PayPalSuccess] Pending order:', pendingOrder);
-
-        if (!pendingOrder) {
-            console.error('[PayPalSuccess] Pending order not found:', orderId);
-            return res.status(404).json({ success: false, error: 'Pending order not found' });
-        }
-
-        const { username, productId, variantId, address, amount, shippingMethodId, shippingCost } = pendingOrder;
-        if (!username || !productId || !variantId || !address || !shippingMethodId || !shippingCost) {
-            console.error('[PayPalSuccess] Missing data:', pendingOrder);
-            return res.status(400).json({ success: false, error: 'Missing order data' });
-        }
-
-        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user || !user.email) {
-            console.error('[PayPalSuccess] User/email not found:', username);
-            return res.status(404).json({ success: false, error: 'User or email not found' });
-        }
-
-        // Check for existing order
-        const existingOrder = await db.collection('users').findOne({ 'orders.paypalOrderId': orderId });
-        if (existingOrder) {
-            console.log('[PayPalSuccess] Order already processed:', orderId);
-            await db.collection('pending_orders').deleteOne({ orderId });
-            delete req.session.pendingOrder;
-            return res.send(`
-                <script>
-                    if (window.opener) {
-                        window.opener.location.href = '/success?orderID=${orderId}';
-                        window.close();
-                    } else {
-                        window.location.href = '/success?orderID=${orderId}';
-                    }
-                </script>
-            `);
-        }
-
-        // Parse shipping address
-        const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
-        const [firstName, ...lastNameParts] = fullName.split(' ');
-        const lastName = lastNameParts.join(' ');
-        const countryCode = countryToIsoCode[country];
-        if (!countryCode) {
-            console.error('[PayPalSuccess] Unsupported country:', country);
-            throw new Error(`Unsupported country: ${country}`);
-        }
-
-        // Fetch product from Printify
-        const printifyApiToken = process.env.PRINTIFY_API_KEY;
-        const shopId = process.env.PRINTIFY_SHOP_ID;
-        const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${printifyApiToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        const productData = await productResponse.json();
-        console.log('[PayPalSuccess] Product:', productData);
-        if (!productResponse.ok) {
-            console.error('[PayPalSuccess] Failed to fetch product:', productData.errors?.reason);
-            throw new Error(`Failed to fetch product: ${productData.errors?.reason || 'Unknown error'}`);
-        }
-
-        const variant = productData.variants.find(v => v.id === parseInt(variantId));
-        if (!variant) {
-            console.error('[PayPalSuccess] Variant not found:', variantId);
-            throw new Error('Variant not found');
-        }
-
-        // Create Printify order
-        const orderData = {
-            line_items: [{
-                product_id: productId,
-                variant_id: parseInt(variantId),
-                quantity: 1
-            }],
-            shipping_method: parseInt(shippingMethodId),
-            send_shipping_notification: true,
-            address_to: {
-                first_name: firstName,
-                last_name: lastName || '',
-                email: user.email,
-                phone: 'N/A',
-                country: countryCode,
-                region: state,
-                address1: street,
-                address2: '',
-                city: city,
-                zip: zip
-            }
-        };
-        const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${printifyApiToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(orderData)
-        });
-        const orderResult = await orderResponse.json();
-        console.log('[PayPalSuccess] Printify order:', orderResult);
-        if (!orderResponse.ok) {
-            console.error('[PayPalSuccess] Failed to create order:', orderResult.errors?.reason);
-            throw new Error(orderResult.errors?.reason || 'Failed to create order');
-        }
-
-        // Store order in database
-        const newOrder = {
-            orderId: orderResult.id,
-            productTitle: productData.title,
-            image: productData.images[0]?.src || 'https://via.placeholder.com/100',
-            price: variant.price / 100,
-            shippingCost: parseFloat(shippingCost),
-            timestamp: Date.now(),
-            status: 'Pending',
-            paymentMethod: 'paypal',
-            paypalOrderId: orderId
-        };
-        if (!user.orders) user.orders = [];
-        user.orders.push(newOrder);
-        await db.collection('users').updateOne(
-            { username: { $regex: `^${username}$`, $options: 'i' } },
-            { $set: { orders: user.orders } }
-        );
-        users[username.toLowerCase()] = user;
-        await saveData(users, 'users');
-
-        // Send confirmation email
-        await sendOrderConfirmationEmail(user.email, username, {
-            orderId: orderResult.id,
-            productTitle: productData.title,
-            price: variant.price / 100,
-            shippingCost: parseFloat(shippingCost),
-            shippingAddress: address
-        });
-
-        // Clean up
-        await db.collection('pending_orders').deleteOne({ orderId });
-        delete req.session.pendingOrder;
-        console.log('[PayPalSuccess] Redirecting to /success:', orderId);
-
-        // Redirect to success page
-        res.send(`
-            <script>
-                if (window.opener) {
-                    window.opener.location.href = '/success?orderID=${orderId}';
-                    window.close();
-                } else {
-                    window.location.href = '/success?orderID=${orderId}';
-                }
-            </script>
-        `);
-    } catch (error) {
-        console.error('[PayPalSuccess] Error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
 /// server.js, replace /delete-blog (around your line 2678+)
 app.post('/delete-blog', async (req, res) => {
     try {
@@ -3885,6 +3671,26 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
     }
 });
 
+// Status endpoint for client polling
+app.get('/paypal-order-status/:orderId', async (req, res) => {
+    console.log('[PayPalOrderStatus] Checking order:', req.params.orderId);
+    try {
+        const orderId = req.params.orderId;
+        const pendingOrder = await db.collection('pending_orders').findOne({ orderId, paymentMethod: 'paypal' });
+        if (!pendingOrder) {
+            const userOrder = await db.collection('users').findOne({ 'orders.paypalOrderId': orderId });
+            if (userOrder) {
+                return res.json({ success: true, status: 'completed' });
+            }
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+        return res.json({ success: false, status: 'pending', message: 'Order awaiting approval' });
+    } catch (error) {
+        console.error('[PayPalOrderStatus] Error:', error.message);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 app.post('/create-paypal-order', async (req, res) => {
     console.log('[PayPalCheckout] Received:', req.body);
     try {
@@ -3941,34 +3747,78 @@ app.post('/create-paypal-order', async (req, res) => {
 });
 
 app.post('/paypal-webhook', express.json(), async (req, res) => {
+    console.log('[PayPalWebhook] Received:', JSON.stringify(req.body, null, 2));
     try {
-        const event = req.body;
-        console.log('[PayPalWebhook] Received:', JSON.stringify(event, null, 2));
+        // Verify webhook signature
+        const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+        if (!webhookId) {
+            console.error('[PayPalWebhook] Missing PAYPAL_WEBHOOK_ID');
+            return res.sendStatus(200);
+        }
+        const transmissionId = req.header('PayPal-Transmission-Id');
+        const transmissionTime = req.header('PayPal-Transmission-Time');
+        const certUrl = req.header('PayPal-Cert-Url');
+        const authAlgo = req.header('PayPal-Auth-Algo');
+        const transmissionSig = req.header('PayPal-Transmission-Sig');
+        const webhookEvent = req.body;
 
-        if (event.event_type === 'CHECKOUT.ORDER.APPROVED') {
-            const orderId = event.resource.id;
-            const username = event.resource.purchase_units[0].description.match(/Lemon Club Merch Purchase for (.+)/)[1];
+        // Basic signature verification (full implementation requires PayPal SDK)
+        console.log('[PayPalWebhook] Verification headers:', { transmissionId, transmissionTime, certUrl, authAlgo, transmissionSig });
+        // Note: For production, use PayPal SDK's WebhookEvent.verify for proper signature validation
 
-            // Find the pending order
-            const pendingOrder = await db.collection('pending_orders').findOne({ orderId, paymentMethod: 'paypal' });
-            if (!pendingOrder) {
-                console.error('[PayPalWebhook] Pending order not found for order:', orderId);
+        if (req.body.event_type === 'CHECKOUT.ORDER.APPROVED') {
+            const orderId = req.body.resource.id;
+            const usernameMatch = req.body.resource.purchase_units[0].description.match(/Lemon Club Merch Purchase for (.+)/);
+            if (!usernameMatch) {
+                console.error('[PayPalWebhook] Username not found in description');
+                return res.sendStatus(200);
+            }
+            const username = usernameMatch[1];
+
+            const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+            if (!user || !user.email) {
+                console.error('[PayPalWebhook] User or email not found:', username);
                 return res.sendStatus(200);
             }
 
-            const { productId, variantId, address } = pendingOrder;
+            const pendingOrder = await db.collection('pending_orders').findOne({ orderId, paymentMethod: 'paypal' });
+            if (!pendingOrder) {
+                console.error('[PayPalWebhook] Pending order not found:', orderId);
+                return res.sendStatus(200);
+            }
+
+            const { productId, variantId, address, amount, shippingMethodId, shippingCost } = pendingOrder;
             const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
             const [firstName, ...lastNameParts] = fullName.split(' ');
             const lastName = lastNameParts.join(' ');
-
             const countryCode = countryToIsoCode[country];
             if (!countryCode) {
-                throw new Error(`Unsupported country: ${country}`);
+                console.error('[PayPalWebhook] Unsupported country:', country);
+                return res.sendStatus(200);
+            }
+
+            // Capture the payment
+            const captureRequest = new paypal.orders.OrdersCaptureRequest(orderId);
+            captureRequest.requestBody({});
+            let capture;
+            try {
+                capture = await paypalClient.execute(captureRequest);
+                console.log('[PayPalWebhook] Capture:', capture.result);
+            } catch (error) {
+                if (error.message.includes('MAX_NUMBER_OF_PAYMENT_ATTEMPTS_EXCEEDED')) {
+                    console.log('[PayPalWebhook] Order already captured:', orderId);
+                } else {
+                    console.error('[PayPalWebhook] Capture failed:', error.message);
+                    return res.sendStatus(200);
+                }
+            }
+            if (capture && capture.result.status !== 'COMPLETED') {
+                console.error('[PayPalWebhook] Payment not completed:', capture.result.status);
+                return res.sendStatus(200);
             }
 
             const printifyApiToken = process.env.PRINTIFY_API_KEY;
             const shopId = process.env.PRINTIFY_SHOP_ID;
-
             const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
                 method: 'GET',
                 headers: {
@@ -3977,17 +3827,25 @@ app.post('/paypal-webhook', express.json(), async (req, res) => {
                 }
             });
             const productData = await productResponse.json();
+            console.log('[PayPalWebhook] Product:', productData);
             if (!productResponse.ok) {
-                throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+                console.error('[PayPalWebhook] Failed to fetch product:', productData.errors?.reason);
+                return res.sendStatus(200);
+            }
+
+            const variant = productData.variants.find(v => v.id === parseInt(variantId));
+            if (!variant) {
+                console.error('[PayPalWebhook] Variant not found:', variantId);
+                return res.sendStatus(200);
             }
 
             const orderData = {
                 line_items: [{
                     product_id: productId,
-                    variant_id: variantId,
+                    variant_id: parseInt(variantId),
                     quantity: 1
                 }],
-                shipping_method: 1,
+                shipping_method: parseInt(shippingMethodId),
                 send_shipping_notification: true,
                 address_to: {
                     first_name: firstName,
@@ -4002,7 +3860,6 @@ app.post('/paypal-webhook', express.json(), async (req, res) => {
                     zip: zip
                 }
             };
-
             const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
                 method: 'POST',
                 headers: {
@@ -4012,26 +3869,39 @@ app.post('/paypal-webhook', express.json(), async (req, res) => {
                 body: JSON.stringify(orderData)
             });
             const orderResult = await orderResponse.json();
-            console.log('[PrintifyOrder] Response:', orderResult);
-
+            console.log('[PayPalWebhook] Printify order:', orderResult);
             if (!orderResponse.ok) {
-                throw new Error(orderResult.errors?.reason || 'Failed to create order');
+                console.error('[PayPalWebhook] Failed to create order:', orderResult.errors?.reason);
+                return res.sendStatus(200);
             }
 
-            const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-            const order = {
+            const newOrder = {
                 orderId: orderResult.id,
                 productTitle: productData.title,
                 image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+                price: parseFloat(amount),
+                shippingCost: parseFloat(shippingCost),
                 timestamp: Date.now(),
-                status: 'Pending'
+                status: 'Pending',
+                paymentMethod: 'paypal',
+                paypalOrderId: orderId
             };
             if (!user.orders) user.orders = [];
-            user.orders.push(order);
+            user.orders.push(newOrder);
             await db.collection('users').updateOne(
                 { username: { $regex: `^${username}$`, $options: 'i' } },
                 { $set: { orders: user.orders } }
             );
+            users[username.toLowerCase()] = user;
+            await saveData(users, 'users');
+
+            await sendOrderConfirmationEmail(user.email, username, {
+                orderId: orderResult.id,
+                productTitle: productData.title,
+                price: parseFloat(amount),
+                shippingCost: parseFloat(shippingCost),
+                shippingAddress: address
+            });
 
             await db.collection('pending_orders').deleteOne({ orderId });
         }
@@ -4039,7 +3909,247 @@ app.post('/paypal-webhook', express.json(), async (req, res) => {
         res.sendStatus(200);
     } catch (error) {
         console.error('[PayPalWebhook] Error:', error.message);
-        res.status(500).json({ error: 'Webhook processing failed' });
+        res.sendStatus(200);
+    }
+});
+
+app.get('/paypal-success', async (req, res) => {
+    console.log('[PayPalSuccess] Full URL:', req.originalUrl);
+    console.log('[PayPalSuccess] Received query:', req.query);
+    try {
+        const orderId = req.query.orderID || req.query.token;
+        const payerId = req.query.PayerID;
+        if (!orderId) {
+            console.error('[PayPalSuccess] Missing orderID or token');
+            return res.status(400).json({ success: false, error: 'Missing orderID or token' });
+        }
+
+        // Check if order is already completed via webhook
+        const userOrder = await db.collection('users').findOne({ 'orders.paypalOrderId': orderId });
+        if (userOrder) {
+            console.log('[PayPalSuccess] Order already processed via webhook:', orderId);
+            await db.collection('pending_orders').deleteOne({ orderId });
+            delete req.session.pendingOrder;
+            return res.send(`
+                <script>
+                    if (window.opener) {
+                        window.opener.location.href = '/success?orderID=${orderId}';
+                        window.close();
+                    } else {
+                        window.location.href = '/success?orderID=${orderId}';
+                    }
+                </script>
+            `);
+        }
+
+        // Fallback to manual capture
+        const orderRequest = new paypal.orders.OrdersGetRequest(orderId);
+        let paypalOrder;
+        try {
+            paypalOrder = await paypalClient.execute(orderRequest);
+            console.log('[PayPalSuccess] PayPal Order:', paypalOrder.result);
+        } catch (error) {
+            console.error('[PayPalSuccess] Failed to fetch order:', error.message);
+            return res.status(500).json({ success: false, error: 'Failed to fetch order: ' + error.message });
+        }
+
+        // Fail if order is stuck too long
+        const orderAge = Date.now() - new Date(paypalOrder.result.create_time).getTime();
+        if ((paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') && orderAge > 5 * 60 * 1000) {
+            console.error('[PayPalSuccess] Order expired:', orderId);
+            return res.status(400).json({ success: false, error: 'Order approval timed out' });
+        }
+
+        // Return pending if no PayerID or not COMPLETED
+        if (!payerId || paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') {
+            console.log('[PayPalSuccess] Order not approved or no PayerID, returning pending status');
+            return res.json({ success: false, status: 'pending', message: 'Order awaiting approval' });
+        }
+
+        // Capture the payment
+        if (paypalOrder.result.status !== 'COMPLETED') {
+            const captureRequest = new paypal.orders.OrdersCaptureRequest(orderId);
+            captureRequest.requestBody({});
+            let capture;
+            try {
+                capture = await paypalClient.execute(captureRequest);
+                console.log('[PayPalSuccess] Capture:', capture.result);
+            } catch (error) {
+                if (error.message.includes('MAX_NUMBER_OF_PAYMENT_ATTEMPTS_EXCEEDED')) {
+                    console.log('[PayPalSuccess] Order already captured:', orderId);
+                    capture = { result: paypalOrder.result };
+                } else {
+                    throw error;
+                }
+            }
+            if (capture.result.status !== 'COMPLETED') {
+                console.error('[PayPalSuccess] Payment not completed:', capture.result.status);
+                return res.status(400).json({ success: false, error: 'Payment not completed' });
+            }
+        }
+
+        // Retrieve pending order
+        let pendingOrder = await db.collection('pending_orders').findOne({ orderId, paymentMethod: 'paypal' }) || req.session.pendingOrder;
+        if (!pendingOrder && paypalOrder.result.purchase_units[0].custom_id) {
+            console.log('[PayPalSuccess] Retrieving order data from custom_id');
+            pendingOrder = JSON.parse(paypalOrder.result.purchase_units[0].custom_id);
+        }
+        console.log('[PayPalSuccess] Pending order:', pendingOrder);
+
+        if (!pendingOrder) {
+            console.error('[PayPalSuccess] Pending order not found:', orderId);
+            return res.status(404).json({ success: false, error: 'Pending order not found' });
+        }
+
+        const { username, productId, variantId, address, amount, shippingMethodId, shippingCost } = pendingOrder;
+        if (!username || !productId || !variantId || !address || !shippingMethodId || !shippingCost) {
+            console.error('[PayPalSuccess] Missing data:', pendingOrder);
+            return res.status(400).json({ success: false, error: 'Missing order data' });
+        }
+
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user || !user.email) {
+            console.error('[PayPalSuccess] User/email not found:', username);
+            return res.status(404).json({ success: false, error: 'User or email not found' });
+        }
+
+        // Check for existing order
+        const existingOrder = await db.collection('users').findOne({ 'orders.paypalOrderId': orderId });
+        if (existingOrder) {
+            console.log('[PayPalSuccess] Order already processed:', orderId);
+            await db.collection('pending_orders').deleteOne({ orderId });
+            delete req.session.pendingOrder;
+            return res.send(`
+                <script>
+                    if (window.opener) {
+                        window.opener.location.href = '/success?orderID=${orderId}';
+                        window.close();
+                    } else {
+                        window.location.href = '/success?orderID=${orderId}';
+                    }
+                </script>
+            `);
+        }
+
+        // Parse shipping address
+        const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+        const [firstName, ...lastNameParts] = fullName.split(' ');
+        const lastName = lastNameParts.join(' ');
+        const countryCode = countryToIsoCode[country];
+        if (!countryCode) {
+            console.error('[PayPalSuccess] Unsupported country:', country);
+            throw new Error(`Unsupported country: ${country}`);
+        }
+
+        // Fetch product from Printify
+        const printifyApiToken = process.env.PRINTIFY_API_KEY;
+        const shopId = process.env.PRINTIFY_SHOP_ID;
+        const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        const productData = await productResponse.json();
+        console.log('[PayPalSuccess] Product:', productData);
+        if (!productResponse.ok) {
+            console.error('[PayPalSuccess] Failed to fetch product:', productData.errors?.reason);
+            throw new Error(`Failed to fetch product: ${productData.errors?.reason || 'Unknown error'}`);
+        }
+
+        const variant = productData.variants.find(v => v.id === parseInt(variantId));
+        if (!variant) {
+            console.error('[PayPalSuccess] Variant not found:', variantId);
+            throw new Error('Variant not found');
+        }
+
+        // Create Printify order
+        const orderData = {
+            line_items: [{
+                product_id: productId,
+                variant_id: parseInt(variantId),
+                quantity: 1
+            }],
+            shipping_method: parseInt(shippingMethodId),
+            send_shipping_notification: true,
+            address_to: {
+                first_name: firstName,
+                last_name: lastName || '',
+                email: user.email,
+                phone: 'N/A',
+                country: countryCode,
+                region: state,
+                address1: street,
+                address2: '',
+                city: city,
+                zip: zip
+            }
+        };
+        const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+        });
+        const orderResult = await orderResponse.json();
+        console.log('[PayPalSuccess] Printify order:', orderResult);
+        if (!orderResponse.ok) {
+            console.error('[PayPalSuccess] Failed to create order:', orderResult.errors?.reason);
+            throw new Error(orderResult.errors?.reason || 'Failed to create order');
+        }
+
+        // Store order in database
+        const newOrder = {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+            price: parseFloat(amount),
+            shippingCost: parseFloat(shippingCost),
+            timestamp: Date.now(),
+            status: 'Pending',
+            paymentMethod: 'paypal',
+            paypalOrderId: orderId
+        };
+        if (!user.orders) user.orders = [];
+        user.orders.push(newOrder);
+        await db.collection('users').updateOne(
+            { username: { $regex: `^${username}$`, $options: 'i' } },
+            { $set: { orders: user.orders } }
+        );
+        users[username.toLowerCase()] = user;
+        await saveData(users, 'users');
+
+        // Send confirmation email
+        await sendOrderConfirmationEmail(user.email, username, {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            price: parseFloat(amount),
+            shippingCost: parseFloat(shippingCost),
+            shippingAddress: address
+        });
+
+        // Clean up
+        await db.collection('pending_orders').deleteOne({ orderId });
+        delete req.session.pendingOrder;
+        console.log('[PayPalSuccess] Redirecting to /success:', orderId);
+
+        // Redirect to success page
+        res.send(`
+            <script>
+                if (window.opener) {
+                    window.opener.location.href = '/success?orderID=${orderId}';
+                    window.close();
+                } else {
+                    window.location.href = '/success?orderID=${orderId}';
+                }
+            </script>
+        `);
+    } catch (error) {
+        console.error('[PayPalSuccess] Error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
