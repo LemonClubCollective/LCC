@@ -62,7 +62,6 @@ const multer = require('multer');
 const axios = require('axios');
 const { TOKEN_PROGRAM_ID: TokenProgramId, createInitializeMintInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createMintToInstruction, ASSOCIATED_TOKEN_PROGRAM_ID } = require('@solana/spl-token');
 const cors = require('cors');
-const crypto = require('crypto');
 const { exec } = require('child_process');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 const { MongoClient } = require('mongodb');
