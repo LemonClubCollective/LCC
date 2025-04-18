@@ -959,7 +959,7 @@ async function completePurchase() {
             console.error('[StripeCheckout] Status check error:', error.message);
         }
     }, 2000);
-      } else if (method === 'paypal') {
+} else if (method === 'paypal') {
     const paypalResponse = await fetch('/create-paypal-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

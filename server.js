@@ -2202,13 +2202,14 @@ app.get('/stripe-success', async (req, res) => {
 
 
 app.get('/paypal-success', async (req, res) => {
-    console.log('[PayPalSuccess] Received:', req.query);
+    console.log('[PayPalSuccess] Received query:', req.query);
     try {
-        const orderId = req.query.orderID;
+        // Handle both orderID and token query parameters
+        const orderId = req.query.orderID || req.query.token;
         const payerId = req.query.PayerID;
         if (!orderId) {
-            console.error('[PayPalSuccess] Missing orderID');
-            return res.status(400).json({ success: false, error: 'Missing orderID' });
+            console.error('[PayPalSuccess] Missing orderID or token');
+            return res.status(400).json({ success: false, error: 'Missing orderID or token' });
         }
 
         const orderRequest = new paypal.orders.OrdersGetRequest(orderId);
