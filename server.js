@@ -2204,7 +2204,6 @@ app.get('/stripe-success', async (req, res) => {
 app.get('/paypal-success', async (req, res) => {
     console.log('[PayPalSuccess] Received query:', req.query);
     try {
-        // Handle both orderID and token query parameters
         const orderId = req.query.orderID || req.query.token;
         const payerId = req.query.PayerID;
         if (!orderId) {
@@ -2216,7 +2215,14 @@ app.get('/paypal-success', async (req, res) => {
         const paypalOrder = await paypalClient.execute(orderRequest);
         console.log('[PayPalSuccess] PayPal Order:', paypalOrder.result);
 
-        // Return pending status if no PayerID or order is not COMPLETED
+        // Check if order is stuck in CREATED or APPROVED for too long
+        const orderAge = Date.now() - new Date(paypalOrder.result.create_time).getTime();
+        if ((paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') && orderAge > 5 * 60 * 1000) {
+            console.error('[PayPalSuccess] Order expired:', orderId);
+            return res.status(400).json({ success: false, error: 'Order approval timed out' });
+        }
+
+        // Return pending if no PayerID or not COMPLETED
         if (!payerId || paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') {
             console.log('[PayPalSuccess] Order not approved or no PayerID, returning pending status');
             return res.json({ success: false, status: 'pending', message: 'Order awaiting approval' });
