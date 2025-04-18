@@ -56,7 +56,6 @@ const paypalClient = new paypal.core.PayPalHttpClient(new paypal.core.LiveEnviro
     process.env.PAYPAL_CLIENT_ID,
     process.env.PAYPAL_CLIENT_SECRET
 ));
-
 const { MailerSend, EmailParams, Sender, Recipient } = require('mailersend');
 const multer = require('multer');
 const axios = require('axios');
@@ -2201,57 +2200,213 @@ app.get('/stripe-success', async (req, res) => {
     }
 });
 
-app.post('/create-paypal-order', async (req, res) => {
+
+app.get('/paypal-success', async (req, res) => {
+    console.log('[PayPalSuccess] Received:', req.query);
     try {
-        const { username, amount, productId, variantId, address } = req.body;
-        if (!username || !amount || !productId || !variantId || !address) {
-            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        const orderId = req.query.orderID;
+        const payerId = req.query.PayerID;
+        if (!orderId) {
+            console.error('[PayPalSuccess] Missing orderID');
+            return res.status(400).json({ success: false, error: 'Missing orderID' });
+        }
+
+        const orderRequest = new paypal.orders.OrdersGetRequest(orderId);
+        const paypalOrder = await paypalClient.execute(orderRequest);
+        console.log('[PayPalSuccess] PayPal Order:', paypalOrder.result);
+
+        // Return pending status if no PayerID or order is not COMPLETED
+        if (!payerId || paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') {
+            console.log('[PayPalSuccess] Order not approved or no PayerID, returning pending status');
+            return res.json({ success: false, status: 'pending', message: 'Order awaiting approval' });
+        }
+
+        // Capture the payment
+        if (paypalOrder.result.status !== 'COMPLETED') {
+            const captureRequest = new paypal.orders.OrdersCaptureRequest(orderId);
+            captureRequest.requestBody({});
+            let capture;
+            try {
+                capture = await paypalClient.execute(captureRequest);
+                console.log('[PayPalSuccess] Capture:', capture.result);
+            } catch (error) {
+                if (error.message.includes('MAX_NUMBER_OF_PAYMENT_ATTEMPTS_EXCEEDED')) {
+                    console.log('[PayPalSuccess] Order already captured:', orderId);
+                    capture = { result: paypalOrder.result };
+                } else {
+                    throw error;
+                }
+            }
+            if (capture.result.status !== 'COMPLETED') {
+                console.error('[PayPalSuccess] Payment not completed:', capture.result.status);
+                return res.status(400).json({ success: false, error: 'Payment not completed' });
+            }
+        }
+
+        // Retrieve pending order
+        let pendingOrder = await db.collection('pending_orders').findOne({ orderId, paymentMethod: 'paypal' }) || req.session.pendingOrder;
+        if (!pendingOrder && paypalOrder.result.purchase_units[0].custom_id) {
+            console.log('[PayPalSuccess] Retrieving order data from custom_id');
+            pendingOrder = JSON.parse(paypalOrder.result.purchase_units[0].custom_id);
+        }
+        console.log('[PayPalSuccess] Pending order:', pendingOrder);
+
+        if (!pendingOrder) {
+            console.error('[PayPalSuccess] Pending order not found:', orderId);
+            return res.status(404).json({ success: false, error: 'Pending order not found' });
+        }
+
+        const { username, productId, variantId, address, amount, shippingMethodId, shippingCost } = pendingOrder;
+        if (!username || !productId || !variantId || !address || !shippingMethodId || !shippingCost) {
+            console.error('[PayPalSuccess] Missing data:', pendingOrder);
+            return res.status(400).json({ success: false, error: 'Missing order data' });
         }
 
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        if (!user || !user.email) {
+            console.error('[PayPalSuccess] User/email not found:', username);
+            return res.status(404).json({ success: false, error: 'User or email not found' });
+        }
 
-        const request = new paypal.orders.OrdersCreateRequest();
-        request.prefer("return=representation");
-        request.requestBody({
-            intent: 'CAPTURE',
-            purchase_units: [{
-                amount: {
-                    currency_code: 'USD',
-                    value: amount.toFixed(2)
-                },
-                description: `Lemon Club Merch Purchase for ${username}`
-            }],
-            application_context: {
-                return_url: 'https://www.lemonclubcollective.com/success',
-                cancel_url: 'https://www.lemonclubcollective.com/cancel'
+        // Check for existing order
+        const existingOrder = await db.collection('users').findOne({ 'orders.paypalOrderId': orderId });
+        if (existingOrder) {
+            console.log('[PayPalSuccess] Order already processed:', orderId);
+            await db.collection('pending_orders').deleteOne({ orderId });
+            delete req.session.pendingOrder;
+            return res.send(`
+                <script>
+                    if (window.opener) {
+                        window.opener.location.href = '/success?orderID=${orderId}';
+                        window.close();
+                    } else {
+                        window.location.href = '/success?orderID=${orderId}';
+                    }
+                </script>
+            `);
+        }
+
+        // Parse shipping address
+        const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
+        const [firstName, ...lastNameParts] = fullName.split(' ');
+        const lastName = lastNameParts.join(' ');
+        const countryCode = countryToIsoCode[country];
+        if (!countryCode) {
+            console.error('[PayPalSuccess] Unsupported country:', country);
+            throw new Error(`Unsupported country: ${country}`);
+        }
+
+        // Fetch product from Printify
+        const printifyApiToken = process.env.PRINTIFY_API_KEY;
+        const shopId = process.env.PRINTIFY_SHOP_ID;
+        const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
             }
         });
+        const productData = await productResponse.json();
+        console.log('[PayPalSuccess] Product:', productData);
+        if (!productResponse.ok) {
+            console.error('[PayPalSuccess] Failed to fetch product:', productData.errors?.reason);
+            throw new Error(`Failed to fetch product: ${productData.errors?.reason || 'Unknown error'}`);
+        }
 
-        console.log('[CreatePayPalOrder] Client ID:', process.env.PAYPAL_CLIENT_ID);
-        const order = await paypalClient.execute(request);
-        console.log('[CreatePayPalOrder] PayPal Response:', order.result);
+        const variant = productData.variants.find(v => v.id === parseInt(variantId));
+        if (!variant) {
+            console.error('[PayPalSuccess] Variant not found:', variantId);
+            throw new Error('Variant not found');
+        }
 
-        const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
+        // Create Printify order
+        const orderData = {
+            line_items: [{
+                product_id: productId,
+                variant_id: parseInt(variantId),
+                quantity: 1
+            }],
+            shipping_method: parseInt(shippingMethodId),
+            send_shipping_notification: true,
+            address_to: {
+                first_name: firstName,
+                last_name: lastName || '',
+                email: user.email,
+                phone: 'N/A',
+                country: countryCode,
+                region: state,
+                address1: street,
+                address2: '',
+                city: city,
+                zip: zip
+            }
+        };
+        const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${printifyApiToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+        });
+        const orderResult = await orderResponse.json();
+        console.log('[PayPalSuccess] Printify order:', orderResult);
+        if (!orderResponse.ok) {
+            console.error('[PayPalSuccess] Failed to create order:', orderResult.errors?.reason);
+            throw new Error(orderResult.errors?.reason || 'Failed to create order');
+        }
 
-        await db.collection('pending_orders').insertOne({
-            orderId: order.result.id,
-            username,
-            productId,
-            variantId,
-            address,
-            amount,
+        // Store order in database
+        const newOrder = {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+            price: variant.price / 100,
+            shippingCost: parseFloat(shippingCost),
+            timestamp: Date.now(),
+            status: 'Pending',
             paymentMethod: 'paypal',
-            createdAt: Date.now()
+            paypalOrderId: orderId
+        };
+        if (!user.orders) user.orders = [];
+        user.orders.push(newOrder);
+        await db.collection('users').updateOne(
+            { username: { $regex: `^${username}$`, $options: 'i' } },
+            { $set: { orders: user.orders } }
+        );
+        users[username.toLowerCase()] = user;
+        await saveData(users, 'users');
+
+        // Send confirmation email
+        await sendOrderConfirmationEmail(user.email, username, {
+            orderId: orderResult.id,
+            productTitle: productData.title,
+            price: variant.price / 100,
+            shippingCost: parseFloat(shippingCost),
+            shippingAddress: address
         });
 
-        res.json({ success: true, url: approvalUrl });
+        // Clean up
+        await db.collection('pending_orders').deleteOne({ orderId });
+        delete req.session.pendingOrder;
+        console.log('[PayPalSuccess] Redirecting to /success:', orderId);
+
+        // Redirect to success page
+        res.send(`
+            <script>
+                if (window.opener) {
+                    window.opener.location.href = '/success?orderID=${orderId}';
+                    window.close();
+                } else {
+                    window.location.href = '/success?orderID=${orderId}';
+                }
+            </script>
+        `);
     } catch (error) {
-        console.error('[CreatePayPalOrder] Error:', error.message, 'Response:', error.response?.text || 'No response');
+        console.error('[PayPalSuccess] Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
 
 /// server.js, replace /delete-blog (around your line 2678+)
 app.post('/delete-blog', async (req, res) => {
@@ -3294,38 +3449,72 @@ app.post('/checkout', async (req, res) => {
 
 
 app.get('/success', async (req, res) => {
-    console.log('[Success] Request received:', {
-        query: req.query,
-        headers: req.headers,
-        session: req.session
-    });
+    console.log('[Success] Received:', req.query);
     try {
         const sessionId = req.query.session_id;
-        if (!sessionId) {
-            console.error('[Success] Missing session_id');
+        const orderId = req.query.orderID;
+        if (!sessionId && !orderId) {
+            console.error('[Success] Missing session_id or orderId');
             return res.send('Payment not completed. <a href="/">Return to site</a>');
         }
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
-        console.log('[Success] Session data:', JSON.stringify(session, null, 2));
-        if (session.payment_status === 'paid') {
-            if (session.mode === 'subscription') {
-                const username = session.metadata.username;
-                users[username].isPremium = true;
-                users[username].subscriptionId = session.subscription;
-                await saveData(users, 'users');
-                res.send('Subscription successful! <a href="/">Return to site</a>');
+
+        if (sessionId) {
+            const session = await stripe.checkout.sessions.retrieve(sessionId);
+            console.log('[Success] Stripe session:', session);
+            if (session.payment_status === 'paid') {
+                if (session.mode === 'subscription') {
+                    const username = session.metadata.username;
+                    users[username].isPremium = true;
+                    users[username].subscriptionId = session.subscription;
+                    await saveData(users, 'users');
+                    res.send('Subscription successful! <a href="/">Return to site</a>');
+                } else {
+                    res.send('Order placed successfully! Check your email for confirmation. <a href="/">Return to site</a>');
+                }
             } else {
-                res.send('Order placed successfully! Check your email for confirmation. <a href="/">Return to site</a>');
+                console.error('[Success] Stripe payment not completed:', session.payment_status);
+                res.send('Payment not completed. <a href="/">Return to site</a>');
             }
-        } else {
-            console.error('[Success] Payment not completed, status:', session.payment_status);
-            res.send('Payment not completed. <a href="/">Return to site</a>');
+        } else if (orderId) {
+            const paypalResponse = await fetch(`https://api.paypal.com/v2/checkout/orders/${orderId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${await getPayPalAccessToken()}`
+                }
+            });
+            const paypalOrder = await paypalResponse.json();
+            console.log('[Success] PayPal order:', paypalOrder);
+            if (paypalResponse.ok && paypalOrder.status === 'COMPLETED') {
+                res.send('Order placed successfully! Check your email for confirmation. <a href="/">Return to site</a>');
+            } else {
+                console.error('[Success] PayPal payment not completed:', paypalOrder.status);
+                res.send('Payment not completed. <a href="/">Return to site</a>');
+            }
         }
     } catch (error) {
-        console.error('[Success] Error:', error.message, error.stack);
+        console.error('[Success] Error:', error.message);
         res.send('Error verifying payment: ' + error.message);
     }
 });
+
+async function getPayPalAccessToken() {
+    const auth = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+    const response = await fetch('https://api.paypal.com/v1/oauth2/token', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Authorization: `Basic ${auth}`
+        },
+        body: 'grant_type=client_credentials'
+    });
+    const data = await response.json();
+    if (!response.ok) {
+        console.error('[PayPalAccessToken] Failed:', data);
+        throw new Error('Failed to get PayPal access token');
+    }
+    return data.access_token;
+}
 
 app.get('/cancel', (req, res) => {
     const error = req.query.error || 'Payment was cancelled or failed.';
@@ -3690,15 +3879,18 @@ app.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (re
 });
 
 app.post('/create-paypal-order', async (req, res) => {
+    console.log('[PayPalCheckout] Received:', req.body);
     try {
-        const { username, amount, productId, variantId, address } = req.body;
-        if (!username || !amount || !productId || !variantId || !address) {
+        const { username, amount, productId, variantId, address, shippingMethodId, shippingCost } = req.body;
+        if (!username || !amount || !productId || !variantId || !address || !shippingMethodId || shippingCost === undefined) {
+            console.error('[PayPalCheckout] Missing fields');
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
-
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-
+        if (!user) {
+            console.error('[PayPalCheckout] User not found:', username);
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
         const request = new paypal.orders.OrdersCreateRequest();
         request.prefer("return=representation");
         request.requestBody({
@@ -3708,18 +3900,18 @@ app.post('/create-paypal-order', async (req, res) => {
                     currency_code: 'USD',
                     value: amount.toFixed(2)
                 },
-                description: `Lemon Club Merch Purchase for ${username}`
+                description: `Lemon Club Merch Purchase for ${username}`,
+                custom_id: JSON.stringify({ username, productId, variantId, address, amount, shippingMethodId, shippingCost })
             }],
             application_context: {
-                return_url: 'https://www.lemonclubcollective.com/success',
+                return_url: 'https://www.lemonclubcollective.com/paypal-success',
                 cancel_url: 'https://www.lemonclubcollective.com/cancel'
             }
         });
-
+        console.log('[CreatePayPalOrder] Client ID:', process.env.PAYPAL_CLIENT_ID);
         const order = await paypalClient.execute(request);
+        console.log('[CreatePayPalOrder] PayPal Response:', order.result);
         const approvalUrl = order.result.links.find(link => link.rel === 'approve').href;
-
-        // Store the pending order in MongoDB
         await db.collection('pending_orders').insertOne({
             orderId: order.result.id,
             username,
@@ -3727,11 +3919,14 @@ app.post('/create-paypal-order', async (req, res) => {
             variantId,
             address,
             amount,
+            shippingMethodId,
+            shippingCost,
             paymentMethod: 'paypal',
             createdAt: Date.now()
         });
-
-        res.json({ success: true, url: approvalUrl });
+        req.session.pendingOrder = { username, productId, variantId, address, amount, shippingMethodId, shippingCost };
+        console.log('[PayPalCheckout] Stored pending order:', req.session.pendingOrder);
+        res.json({ success: true, url: approvalUrl, orderId: order.result.id });
     } catch (error) {
         console.error('[CreatePayPalOrder] Error:', error.message);
         res.status(500).json({ success: false, error: error.message });

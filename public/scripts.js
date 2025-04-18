@@ -829,15 +829,16 @@ async function startCheckout() {
 function updatePaymentFields() {
     const method = document.getElementById('payment-method').value;
     const fieldsDiv = document.getElementById('payment-fields');
+    console.log('[UpdatePaymentFields] Payment method:', method);
     fieldsDiv.innerHTML = '';
     if (method === 'stripe') {
         fieldsDiv.innerHTML = `<p>Proceed to Stripe checkout after clicking "Complete Purchase".</p>`;
     } else if (method === 'paypal') {
         fieldsDiv.innerHTML = `<p>Proceed to PayPal checkout after clicking "Complete Purchase".</p>`;
-    } else if (method === 'sol') {
-        fieldsDiv.innerHTML = `<p>Pay with SOL using your connected wallet.</p>`;
-    } else {
+    } else if (method === 'coinbase') {
         fieldsDiv.innerHTML = `<p>Proceed to Coinbase checkout after clicking "Complete Purchase".</p>`;
+    } else if (method === 'sol') {
+        fieldsDiv.innerHTML = `<p>Pay with Solana wallet after clicking "Complete Purchase".</p>`;
     }
 }
 
@@ -943,7 +944,7 @@ async function completePurchase() {
     // Poll payment status
     const checkStatus = setInterval(async () => {
         try {
-            const response = await fetch(`/success?session_id=${paymentResult.sessionId}`, {
+           const response = await fetch(`/success?session_id=${paymentResult.sessionId}`, {
                 method: 'GET',
                 credentials: 'include'
             });
@@ -958,28 +959,89 @@ async function completePurchase() {
             console.error('[StripeCheckout] Status check error:', error.message);
         }
     }, 2000);
-        } else if (method === 'paypal') {
-            const paypalResponse = await fetch('/create-paypal-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    username: loggedInUsername, 
-                    amount: window.totalPrice,
-                    productId: window.currentProductId,
-                    variantId: window.currentVariantId,
-                    address: address,
-                    shippingMethodId,
-                    shippingCost
-                }),
+      } else if (method === 'paypal') {
+    const paypalResponse = await fetch('/create-paypal-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            username: loggedInUsername, 
+            amount: window.totalPrice,
+            productId: window.currentProductId,
+            variantId: window.currentVariantId,
+            address: address,
+            shippingMethodId,
+            shippingCost
+        }),
+        credentials: 'include'
+    });
+    paymentResult = await paypalResponse.json();
+    if (!paypalResponse.ok || !paymentResult.success) {
+        console.error('[PayPalCheckout] Failed to create order:', paymentResult.error);
+        throw new Error(paymentResult.error || 'Failed to create PayPal order');
+    }
+    const checkoutWindow = window.open(paymentResult.url, '_blank');
+    if (!checkoutWindow) {
+        console.error('[PayPalCheckout] Failed to open checkout window (popup blocked?)');
+        alert('Please allow popups and try again.');
+        return;
+    }
+    document.getElementById('checkout-modal').classList.remove('active');
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; background: #32cd32; color: white;
+        padding: 10px 20px; border-radius: 5px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    `;
+    notification.textContent = 'Complete the payment in the new window. Waiting for confirmation...';
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 5000);
+    const baseUrl = 'https://www.lemonclubcollective.com';
+    const startTime = Date.now();
+    const timeout = 10 * 60 * 1000; // 10 minutes
+    let errorCount = 0;
+    const maxErrors = 10;
+    const checkStatus = setInterval(async () => {
+        if (Date.now() - startTime > timeout || window.location.pathname === '/success' || checkoutWindow.closed) {
+            clearInterval(checkStatus);
+            console.log('[PayPalCheckout] Polling stopped:', 
+                Date.now() - startTime > timeout ? 'Timeout' : 
+                window.location.pathname === '/success' ? 'Redirected' : 'Window closed');
+            if (!window.location.pathname.includes('/success')) {
+                alert('Payment status check stopped. Check your order status in your profile.');
+            }
+            return;
+        }
+        try {
+            const response = await fetch(`${baseUrl}/paypal-success?orderID=${paymentResult.orderId}`, {
+                method: 'GET',
                 credentials: 'include'
             });
-            paymentResult = await paypalResponse.json();
-            if (!paypalResponse.ok || !paymentResult.success) {
-                throw new Error(paymentResult.error || 'Failed to create PayPal order');
+            const result = await response.json();
+            if (response.ok && result.success) {
+                clearInterval(checkStatus);
+                console.log('[PayPalCheckout] Payment successful, redirecting to /success');
+                window.location.href = `${baseUrl}/success?orderID=${paymentResult.orderId}`;
+                checkoutWindow.close();
+            } else if (result.status === 'pending') {
+                console.log('[PayPalCheckout] Order still pending, continuing to poll');
+            } else {
+                console.error('[PayPalCheckout] Polling error:', result.error);
+                errorCount++;
+                if (errorCount >= maxErrors) {
+                    clearInterval(checkStatus);
+                    console.error('[PayPalCheckout] Too many polling errors, stopping');
+                    alert('Unable to verify payment status. Check your order status in your profile.');
+                }
             }
-            window.open(paymentResult.url, '_blank');
-            alert('Please complete the payment in the new window. Your order will be placed after confirmation.');
-            document.getElementById('checkout-modal').classList.remove('active');
+        } catch (error) {
+            console.error('[PayPalCheckout] Status check error:', error.message);
+            errorCount++;
+            if (errorCount >= maxErrors) {
+                clearInterval(checkStatus);
+                console.error('[PayPalCheckout] Too many polling errors, stopping');
+                alert('Unable to verify payment status. Check your order status in your profile.');
+            }
+        }
+    }, 3000);
         } else if (method === 'sol') {
             if (!walletAddress) {
                 alert('Connect Solana wallet to pay with SOL!');
@@ -1065,9 +1127,11 @@ async function completePurchase() {
 async function checkPaymentStatus() {
     const urlParams = new URLSearchParams(window.location.search);
     const sessionId = urlParams.get('session_id');
-    if (sessionId && window.location.pathname === '/success') {
+    const orderId = urlParams.get('orderID');
+    if ((sessionId || orderId) && window.location.pathname === '/success') {
         try {
-            const response = await fetch(`/success?session_id=${sessionId}`, {
+            const param = sessionId ? `session_id=${sessionId}` : `orderId=${orderId}`;
+            const response = await fetch(`/success?${param}`, {
                 method: 'GET',
                 credentials: 'include'
             });
@@ -3045,8 +3109,6 @@ async function deleteBlog(id) {
         if (deleteButton) deleteButton.disabled = false;
     }
 }
-
-
 
 
 async function deletePost(postId) {
