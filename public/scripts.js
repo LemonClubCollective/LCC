@@ -2810,9 +2810,9 @@ async function subscribe() {
 
 
 
-        async function buyMerch(productId, price) {
+       async function buyMerch(productId, price, variantId) {
     if (!walletAddress) {
-        alert('Connect Solana wallet to buy!');
+        alert('Connect Solana wallet to buy!'); // Optional: Keep for Solana compatibility
         return;
     }
     if (!loggedInUsername) {
@@ -2820,62 +2820,206 @@ async function subscribe() {
         return;
     }
 
-
     const address = prompt('Enter shipping address (name, street, city, state, zip, country):');
     if (!address) return;
 
-
     try {
-        // Step 1: Create a Coinbase charge
-        const chargeResponse = await fetch('/create-charge', {
+        // Fetch shipping methods
+        const shippingResponse = await fetch('/printify-shipping', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: loggedInUsername, amount: price }),
+            body: JSON.stringify({ productId, variantId, address }),
+            credentials: 'include'
+        });
+        const shippingResult = await shippingResponse.json();
+        if (!shippingResponse.ok || !shippingResult.success) {
+            throw new Error(shippingResult.error || 'Failed to fetch shipping methods');
+        }
+
+        // Prompt for shipping method
+        const shippingOptions = shippingResult.shippingMethods.map(method => 
+            `${method.name} ($${method.cost / 100}): ${method.id}`
+        ).join('\n');
+        const shippingMethodId = prompt(`Select shipping method:\n${shippingOptions}`);
+        if (!shippingMethodId) return;
+
+        const selectedMethod = shippingResult.shippingMethods.find(method => method.id === parseInt(shippingMethodId));
+        if (!selectedMethod) {
+            throw new Error('Invalid shipping method');
+        }
+
+        // Create Coinbase charge
+        const chargeResponse = await fetch('/coinbase-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                username: loggedInUsername, 
+                amount: price + (selectedMethod.cost / 100),
+                productId,
+                variantId,
+                address,
+                shippingMethodId: selectedMethod.id,
+                shippingCost: selectedMethod.cost / 100
+            }),
             credentials: 'include'
         });
         const chargeResult = await chargeResponse.json();
         if (!chargeResponse.ok || !chargeResult.success) {
-            throw new Error(chargeResult.error || 'Failed to create charge');
+            throw new Error(chargeResult.error || 'Failed to create Coinbase charge');
         }
 
-
-        // Step 2: Open Coinbase payment window
-        window.open(chargeResult.chargeUrl, '_blank');
-
-
-        // Step 3: Place Printify order after payment (assuming payment succeeds)
-        const orderResponse = await fetch('/printify-order', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: loggedInUsername, productId, address }),
-            credentials: 'include'
-        });
-        const orderResult = await orderResponse.json();
-        if (orderResult.success) {
-            alert('Order placed! ID: ' + orderResult.orderId);
-        } else {
-            throw new Error(orderResult.error || 'Failed to place order');
+        // Open Coinbase payment window
+        const checkoutWindow = window.open(chargeResult.chargeUrl, '_blank');
+        if (!checkoutWindow) {
+            console.error('[BuyMerch] Failed to open checkout window (popup blocked?)');
+            alert('Please allow popups and try again.');
+            return;
         }
+
+        // Poll for payment confirmation
+        const startTime = Date.now();
+        const timeout = 2 * 60 * 1000; // 2 minutes
+        let errorCount = 0;
+        const maxErrors = 3;
+        const checkStatus = setInterval(async () => {
+            if (Date.now() - startTime > timeout || window.location.pathname === '/success' || checkoutWindow.closed) {
+                clearInterval(checkStatus);
+                console.log('[BuyMerch] Polling stopped:', 
+                    Date.now() - startTime > timeout ? 'Timeout' : 
+                    window.location.pathname === '/success' ? 'Redirected' : 'Window closed');
+                if (!window.location.pathname.includes('/success')) {
+                    alert('Payment failed or was cancelled. Check your order status in your profile.');
+                }
+                return;
+            }
+            try {
+                const response = await fetch(`/coinbase-order-status/${chargeResult.chargeId}`, {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    clearInterval(checkStatus);
+                    console.log('[BuyMerch] Payment successful, redirecting to /success');
+                    window.location.href = `/success?charge_id=${chargeResult.chargeId}`;
+                    checkoutWindow.close();
+                } else if (result.status === 'pending') {
+                    console.log('[BuyMerch] Order still pending, continuing to poll');
+                } else {
+                    console.error('[BuyMerch] Polling error:', result.error);
+                    clearInterval(checkStatus);
+                    alert('Payment failed: ' + result.error + '. Check your order status in your profile.');
+                }
+            } catch (error) {
+                console.error('[BuyMerch] Status check error:', error.message);
+                errorCount++;
+                if (errorCount >= maxErrors) {
+                    clearInterval(checkStatus);
+                    console.error('[BuyMerch] Too many polling errors, stopping');
+                    alert('Payment failed due to server error. Check your order status in your profile.');
+                }
+            }
+        }, 2000);
     } catch (error) {
         console.error('[BuyMerch] Error:', error.message);
         alert('Failed to complete purchase: ' + error.message);
     }
 }
 
+// Inside completePurchase function
+} else if (method === 'coinbase') {
+    if (!walletAddress) {
+        alert('Connect Solana wallet to pay with crypto!'); // Optional: Keep for Solana compatibility
+        return;
+    }
+    const chargeResponse = await fetch('/coinbase-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            username: loggedInUsername, 
+            amount: window.totalPrice,
+            productId: window.currentProductId,
+            variantId: window.currentVariantId,
+            address: address,
+            shippingMethodId,
+            shippingCost
+        }),
+        credentials: 'include'
+    });
+    paymentResult = await chargeResponse.json();
+    if (!chargeResponse.ok || !paymentResult.success) {
+        throw new Error(paymentResult.error || 'Failed to create Coinbase charge');
+    }
+    const checkoutWindow = window.open(paymentResult.chargeUrl, '_blank');
+    if (!checkoutWindow) {
+        console.error('[CoinbaseCheckout] Failed to open checkout window (popup blocked?)');
+        alert('Please allow popups and try again.');
+        return;
+    }
+    document.getElementById('checkout-modal').classList.remove('active');
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; background: #32cd32; color: white;
+        padding: 10px 20px; border-radius: 5px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    `;
+    notification.textContent = 'Complete the payment in the new window...';
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 5000);
+    const baseUrl = 'https://www.lemonclubcollective.com';
+    const startTime = Date.now();
+    const timeout = 2 * 60 * 1000; // 2 minutes
+    let errorCount = 0;
+    const maxErrors = 3;
+    const checkStatus = setInterval(async () => {
+        if (Date.now() - startTime > timeout || window.location.pathname === '/success' || checkoutWindow.closed) {
+            clearInterval(checkStatus);
+            console.log('[CoinbaseCheckout] Polling stopped:', 
+                Date.now() - startTime > timeout ? 'Timeout' : 
+                window.location.pathname === '/success' ? 'Redirected' : 'Window closed');
+            if (!window.location.pathname.includes('/success')) {
+                alert('Payment failed or was cancelled. Check your order status in your profile.');
+            }
+            return;
+        }
+        try {
+            const response = await fetch(`${baseUrl}/coinbase-order-status/${paymentResult.chargeId}`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                clearInterval(checkStatus);
+                console.log('[CoinbaseCheckout] Payment successful, redirecting to /success');
+                window.location.href = `${baseUrl}/success?charge_id=${paymentResult.chargeId}`;
+                checkoutWindow.close();
+            } else if (result.status === 'pending') {
+                console.log('[CoinbaseCheckout] Order still pending, continuing to poll');
+            } else {
+                console.error('[CoinbaseCheckout] Polling error:', result.error);
+                clearInterval(checkStatus);
+                alert('Payment failed: ' + result.error + '. Check your order status in your profile.');
+            }
+        } catch (error) {
+            console.error('[CoinbaseCheckout] Status check error:', error.message);
+            errorCount++;
+            if (errorCount >= maxErrors) {
+                clearInterval(checkStatus);
+                console.error('[CoinbaseCheckout] Too many polling errors, stopping');
+                alert('Payment failed due to server error. Check your order status in your profile.');
+            }
+        }
+    }, 2000);
+}
 
 
-
-        
-        function formatTime(seconds) {
+function formatTime(seconds) {
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs < 10 ? '0' + secs : secs}`;
  }
 
 
-
-
-        async function startGame(gameId) {
+async function startGame(gameId) {
             if (!loggedInUsername) {
                 alert('Please login to play games!');
                 return;

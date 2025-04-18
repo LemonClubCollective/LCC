@@ -49,6 +49,7 @@ const fetch = require('node-fetch');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const CoinbaseCommerce = require('coinbase-commerce-node');
 const Client = CoinbaseCommerce.Client;
+const crypto = require('crypto');
 Client.init(process.env.COINBASE_API_KEY);
 const Charge = CoinbaseCommerce.resources.Charge;
 const paypal = require('@paypal/checkout-server-sdk');
@@ -3246,8 +3247,9 @@ app.get('/success', async (req, res) => {
     try {
         const sessionId = req.query.session_id;
         const orderId = req.query.orderID;
-        if (!sessionId && !orderId) {
-            console.error('[Success] Missing session_id or orderId');
+        const chargeId = req.query.charge_id;
+        if (!sessionId && !orderId && !chargeId) {
+            console.error('[Success] Missing session_id, orderId, or charge_id');
             return res.send('Payment not completed. <a href="/">Return to site</a>');
         }
 
@@ -3284,6 +3286,14 @@ app.get('/success', async (req, res) => {
                 console.error('[Success] PayPal payment not completed:', paypalOrder.status);
                 res.send('Payment not completed. <a href="/">Return to site</a>');
             }
+        } else if (chargeId) {
+            const userOrder = await db.collection('users').findOne({ 'orders.chargeId': chargeId });
+            if (userOrder) {
+                res.send('Order placed successfully! Check your email for confirmation. <a href="/">Return to site</a>');
+            } else {
+                console.error('[Success] Coinbase payment not completed:', chargeId);
+                res.send('Payment not completed. <a href="/">Return to site</a>');
+            }
         }
     } catch (error) {
         console.error('[Success] Error:', error.message);
@@ -3315,57 +3325,128 @@ app.get('/cancel', (req, res) => {
     res.send(`Payment failed: ${error}. <a href="/">Return to site</a>`);
 });
 
-app.post('/coinbase-checkout', async (req, res) => {
+app.get('/coinbase-order-status/:chargeId', async (req, res) => {
+    console.log('[CoinbaseOrderStatus] Checking charge:', req.params.chargeId);
     try {
-        const { username } = req.body;
-        if (!username) return res.status(400).json({ error: 'Username required' });
-        if (!users[username]) return res.status(404).json({ error: 'User not found' });
-        const chargeData = {
-            name: 'Lemon Club Premium Membership',
-            description: 'One-time purchase for premium access',
-            pricing_type: 'fixed_price',
-            local_price: { amount: '5.00', currency: 'USD' },
-            metadata: { username }
-        };
-        const charge = await Charge.create(chargeData);
-        res.json({ url: charge.hosted_url });
+        const chargeId = req.params.chargeId;
+        const pendingOrder = await db.collection('pending_orders').findOne({ chargeId, paymentMethod: 'coinbase' });
+        if (!pendingOrder) {
+            const userOrder = await db.collection('users').findOne({ 'orders.chargeId': chargeId });
+            if (userOrder) {
+                return res.json({ success: true, status: 'completed' });
+            }
+            return res.status(404).json({ success: false, error: 'Order not found' });
+        }
+        return res.json({ success: false, status: 'pending', message: 'Order awaiting payment confirmation' });
     } catch (error) {
-        console.error('[CoinbaseCheckout] Error:', error.message);
-        res.status(500).json({ error: 'Failed to create Coinbase checkout' });
+        console.error('[CoinbaseOrderStatus] Error:', error.message);
+        return res.status(500).json({ success: false, error: error.message });
     }
 });
 
+app.post('/coinbase-checkout', async (req, res) => {
+    console.log('[CoinbaseCheckout] Received:', req.body);
+    try {
+        const { username, amount, productId, variantId, address, shippingMethodId, shippingCost } = req.body;
+        if (!username || !amount || !productId || !variantId || !address || !shippingMethodId || shippingCost === undefined) {
+            console.error('[CoinbaseCheckout] Missing fields');
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+        const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+        if (!user) {
+            console.error('[CoinbaseCheckout] User not found:', username);
+            return res.status(404).json({ success: false, error: 'User not found' });
+        }
+        const chargeData = {
+            name: 'Lemon Club Merch Purchase',
+            description: `Merch purchase for ${username}`,
+            pricing_type: 'fixed_price',
+            local_price: { amount: amount.toFixed(2), currency: 'USD' },
+            metadata: { 
+                username,
+                productId,
+                variantId,
+                address,
+                shippingMethodId,
+                shippingCost,
+                type: 'merch_purchase'
+            },
+            redirect_url: 'https://www.lemonclubcollective.com/coinbase-success',
+            cancel_url: 'https://www.lemonclubcollective.com/cancel'
+        };
+        const charge = await Charge.create(chargeData);
+        await db.collection('pending_orders').insertOne({
+            chargeId: charge.id,
+            username,
+            productId,
+            variantId,
+            address,
+            amount,
+            shippingMethodId,
+            shippingCost,
+            paymentMethod: 'coinbase',
+            createdAt: Date.now()
+        });
+        req.session.pendingOrder = { username, productId, variantId, address, amount, shippingMethodId, shippingCost };
+        console.log('[CoinbaseCheckout] Stored pending order:', req.session.pendingOrder);
+        res.json({ success: true, chargeUrl: charge.hosted_url, chargeId: charge.id });
+    } catch (error) {
+        console.error('[CoinbaseCheckout] Error:', error.message);
+        res.status(500).json({ success: false, error: 'Failed to create Coinbase checkout' });
+    }
+});
 
 app.post('/coinbase-webhook', express.json(), async (req, res) => {
+    console.log('[CoinbaseWebhook] Received:', JSON.stringify(req.body, null, 2));
     try {
+        // Verify webhook signature
+        const signature = req.header('X-CC-Webhook-Signature');
+        const webhookSecret = process.env.COINBASE_WEBHOOK_SECRET;
+        if (!webhookSecret) {
+            console.error('[CoinbaseWebhook] Missing COINBASE_WEBHOOK_SECRET');
+            return res.sendStatus(200);
+        }
+        const computedSignature = crypto
+            .createHmac('sha256', webhookSecret)
+            .update(JSON.stringify(req.body))
+            .digest('hex');
+        if (signature !== computedSignature) {
+            console.error('[CoinbaseWebhook] Invalid signature');
+            return res.sendStatus(200);
+        }
+
         const event = req.body.event;
         if (event.type === 'charge:confirmed') {
+            const chargeId = event.data.id;
             const metadata = event.data.metadata;
             const username = metadata.username;
-            const chargeId = event.data.id;
+            const type = metadata.type;
 
-            if (metadata.type === 'merch_purchase') {
-                // Find the pending order
-                const pendingOrder = await db.collection('pending_orders').findOne({ chargeId });
+            const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
+            if (!user || !user.email) {
+                console.error('[CoinbaseWebhook] User or email not found:', username);
+                return res.sendStatus(200);
+            }
+
+            if (type === 'merch_purchase') {
+                const pendingOrder = await db.collection('pending_orders').findOne({ chargeId, paymentMethod: 'coinbase' });
                 if (!pendingOrder) {
-                    console.error('[CoinbaseWebhook] Pending order not found for charge:', chargeId);
+                    console.error('[CoinbaseWebhook] Pending order not found:', chargeId);
                     return res.sendStatus(200);
                 }
 
-                // Place the Printify order
-                const { productId, variantId, address } = pendingOrder;
+                const { productId, variantId, address, amount, shippingMethodId, shippingCost } = pendingOrder;
                 const [fullName, street, city, state, zip, country] = address.split(', ').map(s => s.trim());
                 const [firstName, ...lastNameParts] = fullName.split(' ');
                 const lastName = lastNameParts.join(' ');
-
                 const countryCode = countryToIsoCode[country];
                 if (!countryCode) {
-                    throw new Error(`Unsupported country: ${country}`);
+                    console.error('[CoinbaseWebhook] Unsupported country:', country);
+                    return res.sendStatus(200);
                 }
 
                 const printifyApiToken = process.env.PRINTIFY_API_KEY;
                 const shopId = process.env.PRINTIFY_SHOP_ID;
-
                 const productResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/products/${productId}.json`, {
                     method: 'GET',
                     headers: {
@@ -3374,17 +3455,25 @@ app.post('/coinbase-webhook', express.json(), async (req, res) => {
                     }
                 });
                 const productData = await productResponse.json();
+                console.log('[CoinbaseWebhook] Product:', productData);
                 if (!productResponse.ok) {
-                    throw new Error(`Failed to fetch product details: ${productData.errors?.reason || 'Unknown error'}`);
+                    console.error('[CoinbaseWebhook] Failed to fetch product:', productData.errors?.reason);
+                    return res.sendStatus(200);
+                }
+
+                const variant = productData.variants.find(v => v.id === parseInt(variantId));
+                if (!variant) {
+                    console.error('[CoinbaseWebhook] Variant not found:', variantId);
+                    return res.sendStatus(200);
                 }
 
                 const orderData = {
                     line_items: [{
                         product_id: productId,
-                        variant_id: variantId,
+                        variant_id: parseInt(variantId),
                         quantity: 1
                     }],
-                    shipping_method: 1,
+                    shipping_method: parseInt(shippingMethodId),
                     send_shipping_notification: true,
                     address_to: {
                         first_name: firstName,
@@ -3399,7 +3488,6 @@ app.post('/coinbase-webhook', express.json(), async (req, res) => {
                         zip: zip
                     }
                 };
-
                 const orderResponse = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
                     method: 'POST',
                     headers: {
@@ -3409,43 +3497,131 @@ app.post('/coinbase-webhook', express.json(), async (req, res) => {
                     body: JSON.stringify(orderData)
                 });
                 const orderResult = await orderResponse.json();
-                console.log('[PrintifyOrder] Response:', orderResult);
-
+                console.log('[CoinbaseWebhook] Printify order:', orderResult);
                 if (!orderResponse.ok) {
-                    throw new Error(orderResult.errors?.reason || 'Failed to create order');
+                    console.error('[CoinbaseWebhook] Failed to create order:', orderResult.errors?.reason);
+                    return res.sendStatus(200);
                 }
 
-                // Store order with product details
-                const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
-                const order = {
+                const newOrder = {
                     orderId: orderResult.id,
                     productTitle: productData.title,
                     image: productData.images[0]?.src || 'https://via.placeholder.com/100',
+                    price: parseFloat(amount),
+                    shippingCost: parseFloat(shippingCost),
                     timestamp: Date.now(),
-                    status: 'Pending'
+                    status: 'Pending',
+                    paymentMethod: 'coinbase',
+                    chargeId
                 };
                 if (!user.orders) user.orders = [];
-                user.orders.push(order);
+                user.orders.push(newOrder);
                 await db.collection('users').updateOne(
                     { username: { $regex: `^${username}$`, $options: 'i' } },
                     { $set: { orders: user.orders } }
                 );
+                users[username.toLowerCase()] = user;
+                await saveData(users, 'users');
 
-                // Clean up the pending order
+                await sendOrderConfirmationEmail(user.email, username, {
+                    orderId: orderResult.id,
+                    productTitle: productData.title,
+                    price: parseFloat(amount),
+                    shippingCost: parseFloat(shippingCost),
+                    shippingAddress: address
+                });
+
                 await db.collection('pending_orders').deleteOne({ chargeId });
-            } else {
-                // Existing premium membership logic
+            } else if (type === 'premium_membership') {
                 users[username].isPremium = true;
                 await saveData(users, 'users');
             }
         }
+
         res.sendStatus(200);
     } catch (error) {
         console.error('[CoinbaseWebhook] Error:', error.message);
-        res.status(500).json({ error: 'Webhook processing failed' });
+        res.sendStatus(200);
     }
 });
 
+app.get('/coinbase-success', async (req, res) => {
+    console.log('[CoinbaseSuccess] Full URL:', req.originalUrl);
+    console.log('[CoinbaseSuccess] Received query:', req.query);
+    try {
+        const chargeId = req.query.charge_id;
+        if (!chargeId) {
+            console.error('[CoinbaseSuccess] Missing charge_id');
+            return res.send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Missing charge ID. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
+        }
+
+        // Check if order is already completed via webhook
+        const userOrder = await db.collection('users').findOne({ 'orders.chargeId': chargeId });
+        if (userOrder) {
+            console.log('[CoinbaseSuccess] Order already processed via webhook:', chargeId);
+            await db.collection('pending_orders').deleteOne({ chargeId });
+            delete req.session.pendingOrder;
+            return res.send(`
+                <script>
+                    if (window.opener) {
+                        window.opener.location.href = '/success?charge_id=${chargeId}';
+                        window.close();
+                    } else {
+                        window.location.href = '/success?charge_id=${chargeId}';
+                    }
+                </script>
+            `);
+        }
+
+        // Show loading page to wait for webhook
+        return res.send(`
+            <html>
+                <head>
+                    <title>Processing Payment</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                        .loader { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
+                        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                    </style>
+                </head>
+                <body>
+                    <h2>Processing Your Payment</h2>
+                    <p>Please wait while we confirm your payment...</p>
+                    <div class="loader"></div>
+                    <script>
+                        setTimeout(() => {
+                            if (window.opener) {
+                                window.opener.location.href = '/success?charge_id=${chargeId}';
+                                window.close();
+                            } else {
+                                window.location.href = '/success?charge_id=${chargeId}';
+                            }
+                        }, 10000);
+                    </script>
+                </body>
+            </html>
+        `);
+    } catch (error) {
+        console.error('[CoinbaseSuccess] Error:', error.message);
+        return res.send(`
+            <html>
+                <body>
+                    <h2>Error</h2>
+                    <p>Error processing payment: ${error.message}. Please try again.</p>
+                    <a href="/">Return to site</a>
+                </body>
+            </html>
+        `);
+    }
+});
 
 app.get('/store-items', (req, res) => {
     res.json([
