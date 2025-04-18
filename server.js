@@ -3921,7 +3921,15 @@ app.get('/paypal-success', async (req, res) => {
         const payerId = req.query.PayerID;
         if (!orderId) {
             console.error('[PayPalSuccess] Missing orderID or token');
-            return res.status(400).json({ success: false, error: 'Missing orderID or token' });
+            return res.status(400).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Missing order ID. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         // Check if order is already completed via webhook
@@ -3950,20 +3958,62 @@ app.get('/paypal-success', async (req, res) => {
             console.log('[PayPalSuccess] PayPal Order:', paypalOrder.result);
         } catch (error) {
             console.error('[PayPalSuccess] Failed to fetch order:', error.message);
-            return res.status(500).json({ success: false, error: 'Failed to fetch order: ' + error.message });
+            return res.status(500).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Failed to fetch order: ${error.message}</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         // Fail if order is stuck too long
         const orderAge = Date.now() - new Date(paypalOrder.result.create_time).getTime();
         if ((paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') && orderAge > 5 * 60 * 1000) {
             console.error('[PayPalSuccess] Order expired:', orderId);
-            return res.status(400).json({ success: false, error: 'Order approval timed out' });
+            return res.status(400).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Order approval timed out. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
-        // Return pending if no PayerID or not COMPLETED
+        // Show loading page for pending orders
         if (!payerId || paypalOrder.result.status === 'CREATED' || paypalOrder.result.status === 'APPROVED') {
-            console.log('[PayPalSuccess] Order not approved or no PayerID, returning pending status');
-            return res.json({ success: false, status: 'pending', message: 'Order awaiting approval' });
+            console.log('[PayPalSuccess] Order not approved or no PayerID, showing loading page');
+            return res.send(`
+                <html>
+                    <head>
+                        <title>Processing Payment</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                            .loader { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
+                            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                        </style>
+                    </head>
+                    <body>
+                        <h2>Processing Your Payment</h2>
+                        <p>Please wait while we confirm your payment...</p>
+                        <div class="loader"></div>
+                        <script>
+                            setTimeout(() => {
+                                if (window.opener) {
+                                    window.opener.location.href = '/success?orderID=${orderId}';
+                                    window.close();
+                                } else {
+                                    window.location.href = '/success?orderID=${orderId}';
+                                }
+                            }, 10000); // Wait 10 seconds for webhook
+                        </script>
+                    </body>
+                </html>
+            `);
         }
 
         // Capture the payment
@@ -3984,7 +4034,15 @@ app.get('/paypal-success', async (req, res) => {
             }
             if (capture.result.status !== 'COMPLETED') {
                 console.error('[PayPalSuccess] Payment not completed:', capture.result.status);
-                return res.status(400).json({ success: false, error: 'Payment not completed' });
+                return res.status(400).send(`
+                    <html>
+                        <body>
+                            <h2>Error</h2>
+                            <p>Payment not completed. Please try again.</p>
+                            <a href="/">Return to site</a>
+                        </body>
+                    </html>
+                `);
             }
         }
 
@@ -3998,19 +4056,43 @@ app.get('/paypal-success', async (req, res) => {
 
         if (!pendingOrder) {
             console.error('[PayPalSuccess] Pending order not found:', orderId);
-            return res.status(404).json({ success: false, error: 'Pending order not found' });
+            return res.status(404).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Pending order not found. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         const { username, productId, variantId, address, amount, shippingMethodId, shippingCost } = pendingOrder;
         if (!username || !productId || !variantId || !address || !shippingMethodId || !shippingCost) {
             console.error('[PayPalSuccess] Missing data:', pendingOrder);
-            return res.status(400).json({ success: false, error: 'Missing order data' });
+            return res.status(400).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Missing order data. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         const user = await db.collection('users').findOne({ username: { $regex: `^${username}$`, $options: 'i' } });
         if (!user || !user.email) {
             console.error('[PayPalSuccess] User/email not found:', username);
-            return res.status(404).json({ success: false, error: 'User or email not found' });
+            return res.status(404).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>User or email not found. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         // Check for existing order
@@ -4038,7 +4120,15 @@ app.get('/paypal-success', async (req, res) => {
         const countryCode = countryToIsoCode[country];
         if (!countryCode) {
             console.error('[PayPalSuccess] Unsupported country:', country);
-            throw new Error(`Unsupported country: ${country}`);
+            return res.status(400).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Unsupported country: ${country}. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         // Fetch product from Printify
@@ -4055,13 +4145,29 @@ app.get('/paypal-success', async (req, res) => {
         console.log('[PayPalSuccess] Product:', productData);
         if (!productResponse.ok) {
             console.error('[PayPalSuccess] Failed to fetch product:', productData.errors?.reason);
-            throw new Error(`Failed to fetch product: ${productData.errors?.reason || 'Unknown error'}`);
+            return res.status(500).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Failed to fetch product: ${productData.errors?.reason || 'Unknown error'}. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         const variant = productData.variants.find(v => v.id === parseInt(variantId));
         if (!variant) {
             console.error('[PayPalSuccess] Variant not found:', variantId);
-            throw new Error('Variant not found');
+            return res.status(400).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Variant not found. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         // Create Printify order
@@ -4098,7 +4204,15 @@ app.get('/paypal-success', async (req, res) => {
         console.log('[PayPalSuccess] Printify order:', orderResult);
         if (!orderResponse.ok) {
             console.error('[PayPalSuccess] Failed to create order:', orderResult.errors?.reason);
-            throw new Error(orderResult.errors?.reason || 'Failed to create order');
+            return res.status(500).send(`
+                <html>
+                    <body>
+                        <h2>Error</h2>
+                        <p>Failed to create order: ${orderResult.errors?.reason || 'Unknown error'}. Please try again.</p>
+                        <a href="/">Return to site</a>
+                    </body>
+                </html>
+            `);
         }
 
         // Store order in database
@@ -4149,7 +4263,15 @@ app.get('/paypal-success', async (req, res) => {
         `);
     } catch (error) {
         console.error('[PayPalSuccess] Error:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        return res.status(500).send(`
+            <html>
+                <body>
+                    <h2>Error</h2>
+                    <p>Error processing payment: ${error.message}. Please try again.</p>
+                    <a href="/">Return to site</a>
+                </body>
+            </html>
+        `);
     }
 });
 
