@@ -1277,7 +1277,7 @@ async function updateNFTDisplay(containerId, showButtons = true) {
             const staked = nft.staked || false;
             console.log(`[NFT Display] NFT ${mintAddress} staked: ${staked}`);
             const baseStageName = stageName.split('#')[0].trim();
-            const canEvolve = (typeof lemonadePoints.gte === 'function' ? lemonadePoints.gte(10) : Number(lemonadePoints) >= 10) && baseStageName !== 'Lemon Tree';
+            const canEvolve = (typeof lemonadePoints.gte === 'function' ? lemonadePoints.gte(1000) : Number(lemonadePoints) >= 1000) && baseStageName !== 'Lemon Tree';
             html += `<div class="nft-card ${staked ? 'staked' : ''}" data-index="${index}">
                 <img id="nft-img-${mintAddress}" alt="${stageName}" src="${imageUri}" 
                     onerror="this.onerror=null; this.src='https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/profilepics/magicseed.png'; console.log('NFT image failed:', '${imageUri}')" 
@@ -2267,8 +2267,8 @@ async function evolveNFT(mintAddress, button) {
         alert('Please login and connect wallet to evolve!');
         return;
     }
-    if (!lemonadePoints || lemonadePoints.lt(10)) {
-        alert('Need 10 Lemonade Points to evolve!');
+    if (!lemonadePoints || lemonadePoints.lt(1000)) {
+        alert('Need 1000 Lemonade Points to evolve!');
         return;
     }
 

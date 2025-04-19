@@ -146,12 +146,16 @@
     margin-top: 0.3rem;
 }
 
-.building.friends, .building.shop, .building.dexscreener, .building.support {
+.building.shop, .building.dexscreener, .building.support {
     width: clamp(8rem, 25vw, 9.6rem); /* Was 12rem, now 80% of that */
 }
 
+#building-friends {
+    width: clamp(6.8rem, 20vw, 7.6rem);
+}
+
 #building-blog, #building-videos {
-    width: clamp(5rem, 15vw, 5.2rem); /* Was 6.5rem, now 80% of that */
+    width: clamp(10rem, 30vw, 10.2rem);
 }
 
 .dropdown {
@@ -190,9 +194,9 @@
 }
 
 .dropdown-content div img {
-    width: 1.25rem;
+    width: 1.5rem;
     height: auto;
-    margin-right: 0.5rem;
+    margin-right: 0.75rem;
 }
 
 .dropdown-content div:hover {
@@ -1143,7 +1147,7 @@ footer {
         <img id="evolve-loading-gif" src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lemonhead.gif" alt="Loading" style="display: none; width: 96px; height: 96px; margin: 0 auto;">
         <span class="close" onclick="closeEvolveConfirmModal()">×</span>
         <h2>Ready to Evolve? 🍋</h2>
-        <p>Ready to squeeze 10 lemonade points to grow your NFT to the next juicy stage? Let’s evolve!</p>
+        <p>Ready to squeeze 1000 lemonade points to grow your NFT to the next juicy stage? Let’s evolve!</p>
         <button onclick="confirmEvolve()" style="margin: 10px; padding: 10px 20px; background: linear-gradient(45deg, #ffeb3b, #ff4500); color: white; border: none; border-radius: 10px; cursor: pointer;">Confirm</button>
         <button onclick="closeEvolveConfirmModal()" style="margin: 10px; padding: 10px 20px; background: #ccc; color: #333; border: none; border-radius: 10px; cursor: pointer;">Cancel</button>
     </div>
@@ -1364,23 +1368,23 @@ footer {
             <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/gallery.png" alt="Quests">
         </div>
         <div class="splash-icon" style="top: 40%; left: 70%; width: 200px">
-            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/blog.png" alt="Blog">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/blogicon.png" alt="Blog">
         </div>
-        <div class="splash-icon" style="top: 50%; left: 15%; width: 280px;">
-            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/shop.png" alt="Store">
-        </div>
+        <div class="splash-icon" style="top: 50%; left: 15%; width: 224px;" onclick="showContent('friends')">
+    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/arcade.png" alt="Arcade">
+</div>
         <div class="splash-icon" style="top: 60%; left: 30%; width: 240px;">
             <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/forum.png" alt="Forum">
         </div>
         <div class="splash-icon" style="top: 70%; left: 45%; width: 200px;">
-            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/videosicon.png" alt="Videos">
+            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/videos.png" alt="Videos">
         </div>
         <div class="splash-icon" style="top: 80%; left: 60%; width: 240px">
             <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/helpdesk.png" alt="Admin">
         </div>
-        <div class="splash-icon" style="top: 25%; left: 80%; width: 200px">
-            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/tokenomics.png" alt="Tokenomics">
-        </div>
+        <div class="splash-icon" style="top: 25%; left: 80%; width: 200px;" onclick="showContent('tokenomics')">
+    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/more.png" alt="More">
+</div>
         <div class="splash-icon" style="top: 35%; left: 85%; width: 200px">
             <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/roadmap.png" alt="Road Map">
         </div>
@@ -1433,37 +1437,37 @@ footer {
                         <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/greenhouse.png" alt="Garden">
                         <div class="building-label">Garden</div>
                     </div>
-                    <div class="building friends" id="building-friends" onclick="showContent('friends')" data-tooltip="Meet Friends">
-                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/treehouse.png" alt="Friends">
-                        <div class="building-label">Friends</div>
-                    </div>
-                    <div class="building" id="building-quests" onclick="showContent('quests')" data-tooltip="Lemon Grove Quests">
-                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/gallery.png" alt="Quests">
-                        <div class="building-label">Quests</div>
-                    </div>
-                    <div class="building" id="building-blog" onclick="showContent('blog')" data-tooltip="Read Blog/Newsletter">
-                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/blog.png" alt="Blog">
-                        <div class="building-label">Blog</div>
-                    </div>
-                  <div class="building shop" id="building-store" onclick="showContent('store')" data-tooltip="Buy Merch">
-    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/shop.png" alt="Store">
+                    <div class="building friends" id="building-forum" onclick="showContent('forum')" data-tooltip="Join Forum">
+    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/treehouse.png" alt="Forum">
+    <div class="building-label">Forum</div>
+</div>
+                    <div class="building shop" id="building-store" onclick="showContent('store')" data-tooltip="Buy Merch">
+    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/gallery.png" alt="Store">
     <div class="building-label">Store</div>
 </div>
-                    <div class="building" id="building-forum" onclick="showContent('forum')" data-tooltip="Join Forum">
-                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/forum.png" alt="Forum">
-                        <div class="building-label">Forum</div>
-                    </div>
-                    <div class="building" id="building-videos" onclick="showContent('videos')" data-tooltip="Watch Videos">
-                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/videosicon.png" alt="Videos">
-                        <div class="building-label">Videos</div>
-                    </div>
+                    <div class="building" id="building-blog" onclick="showContent('blog')" data-tooltip="Read Blog/Newsletter">     
+<img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/blogicon.png" alt="Blog">
+    <div class="building-label">Blog</div>
+</div>
+                <div class="building shop" id="building-friends" onclick="showContent('friends')" data-tooltip="Play Arcade">     
+<img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/arcade.png" alt="Arcade">
+    <div class="building-label">Arcade</div>
+</div>
+                    <div class="building" id="building-quests" onclick="showContent('quests')" data-tooltip="Lemon Grove Quests">
+    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/forum.png" alt="Quests">
+    <div class="building-label">Quests</div>
+</div>
+                    <div class="building" id="building-videos" onclick="showContent('videos')" data-tooltip="Watch Videos">     
+<img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/videos.png" alt="Videos">
+    <div class="building-label">Videos</div>
+</div>
                     <div class="building" id="building-admin" onclick="showContent('admin')" data-tooltip="Admin Portal">
                         <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/helpdesk.png" alt="Admin">
                         <div class="building-label">Admin</div>
                     </div>
-                    <div class="building dropdown" id="building-more" data-tooltip="More Options">
-                        <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/townhall.png" alt="More">
-                        <div class="building-label">More</div>
+                   <div class="building dropdown" id="building-more" data-tooltip="More Options">
+    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/more.png" alt="More">
+    <div class="building-label">More</div>
                         <div class="dropdown-content">
                             <div onclick="showContent('tokenomics')">
                                 <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/tokenomics.png" alt="Tokenomics">

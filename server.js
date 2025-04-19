@@ -2742,7 +2742,7 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
         const lemonadePoints = getLemonadePoints(lowerUsername);
-        if (lemonadePoints < 10) return res.status(400).json({ success: false, error: 'Not enough Lemonade Points' });
+        if (lemonadePoints < 1000) return res.status(400).json({ success: false, error: 'Not enough Lemonade Points' });
         const nft = user.nfts.find(n => n.mintAddress === mintAddress);
         if (!nft) return res.status(404).json({ success: false, error: 'NFT not found' });
         const baseStageName = nft.name.split('#')[0].trim();
@@ -2781,7 +2781,7 @@ app.get('/evolve/:username/:mintAddress', async (req, res) => {
         ];
         const totalPoints = categories.reduce((sum, cat) => sum + cat.value, BigInt(0));
         if (totalPoints > 0) {
-            let pointsToDeduct = BigInt(10);
+            let pointsToDeduct = BigInt(1000);
             for (const category of categories) {
                 if (pointsToDeduct <= 0) break;
                 const categoryShare = (category.value * pointsToDeduct) / totalPoints || BigInt(1);
