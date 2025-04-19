@@ -544,16 +544,10 @@ async function initialize() {
     console.log('[Initialize] Initialization complete');
 }
 
-
-
-
 // Helper to standardize timestamps
 function getCurrentTime() {
     return Date.now(); // Always milliseconds
 }
-
-
-
 
 app.post('/reset-levi-quests', async (req, res) => {
     try {

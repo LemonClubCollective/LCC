@@ -91,7 +91,7 @@
 }
 
 .lcc-logo {
-    width: clamp(4rem, 15vw, 5rem);
+    width: clamp(10rem, 30vw, 10rem);
     height: auto;
     cursor: pointer;
     transition: transform 0.3s;
@@ -384,10 +384,20 @@ button.loading {
     100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
+#mint-loading-gif, #evolve-loading-gif, #stake-loading-gif {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    display: none;
+}
+
 [data-tooltip] {
     position: relative;
     z-index: 50;
 }
+
 
 [data-tooltip]:hover::after {
     content: attr(data-tooltip);
@@ -1144,7 +1154,7 @@ footer {
 </div>
 <div id="evolve-confirm-modal" class="modal">
     <div class="modal-content evolve-confirm-content">
-        <img id="evolve-loading-gif" src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lemonhead.gif" alt="Loading" style="display: none; width: 96px; height: 96px; margin: 0 auto;">
+        <img id="evolve-loading-gif" src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lemonhead.gif" alt="Loading" style="display: none; width: 80vw; max-width: 80vh; margin: 0 auto;">
         <span class="close" onclick="closeEvolveConfirmModal()">×</span>
         <h2>Ready to Evolve? 🍋</h2>
         <p>Ready to squeeze 1000 lemonade points to grow your NFT to the next juicy stage? Let’s evolve!</p>
@@ -1154,7 +1164,7 @@ footer {
 </div>
 <div id="stake-confirm-modal" class="modal">
     <div class="modal-content stake-confirm-content">
-        <img id="stake-loading-gif" src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lemonhead.gif" alt="Loading" style="display: none; width: 96px; height: 96px; margin: 0 auto;">
+        <img id="stake-loading-gif" src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lemonhead.gif" alt="Loading" style="display: none; width: 80vw; max-width: 80vh; margin: 0 auto;">
         <span class="close" onclick="closeStakeConfirmModal()">×</span>
         <h2>Ready to Plant Your Lemon? 🍋</h2>
         <p id="stake-confirm-message"></p>
@@ -1164,7 +1174,7 @@ footer {
 </div>
 <div id="mint-confirm-modal" class="modal">
     <div class="modal-content mint-confirm-content">
-        <img id="mint-loading-gif" src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lemonhead.gif" alt="Loading" style="display: none; width: 96px; height: 96px; margin: 0 auto;">
+        <img id="mint-loading-gif" src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/lemonhead.gif" alt="Loading" style="display: none;  width: 80vw; max-width: 80vh; margin: 0 auto;">
         <span class="close" onclick="closeMintConfirmModal()">×</span>
         <h2>Mint a Fresh Lemon! 🍋</h2>
         <p>Get ready to drop 0.1 SOL to sprout a brand-new Lemon NFT! This little seed’s yours to grow—stake it, evolve it, show it off. Note: Total fees are ~0.115 SOL for minting (0.1 SOL + ~0.002 SOL network fees + ~0.003 SOL account creation) and ~0.015 SOL for metadata setup (one-time fee).Ready to plant some crypto zest? Hit confirm and let’s squeeze it!</p>
@@ -1378,18 +1388,6 @@ footer {
         </div>
         <div class="splash-icon" style="top: 70%; left: 45%; width: 200px;">
             <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/videos.png" alt="Videos">
-        </div>
-        <div class="splash-icon" style="top: 80%; left: 60%; width: 240px">
-            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/helpdesk.png" alt="Admin">
-        </div>
-        <div class="splash-icon" style="top: 25%; left: 80%; width: 200px;" onclick="showContent('tokenomics')">
-    <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/more.png" alt="More">
-</div>
-        <div class="splash-icon" style="top: 35%; left: 85%; width: 200px">
-            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/roadmap.png" alt="Road Map">
-        </div>
-        <div class="splash-icon" style="top: 45%; left: 90%; width: 200px">
-            <img src="https://drahmlrfgetmm.cloudfront.net/assetsNFTmain/siteicons/howto.png" alt="How to Buy">
         </div>
        <button class="grow-lemons-btn" id="grow-lemons-btn" onclick="showContent('what-is-lcc')">Grow Lemons</button>
     </div>
